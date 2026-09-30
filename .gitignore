@@ -36,3 +36,10 @@ temp/
 # ── CloudSync meta ──
 .cloudsync_meta.json
 .cloudsync_zip_meta.json
+
+# ── WPS Comate workspace ──
+.wpscomate/
+comate.json
+
+# ── App Studio build artifacts (if any) ──
+.publish/
