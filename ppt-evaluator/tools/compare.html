@@ -32,6 +32,12 @@
   .progress-bar { width: 200px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
   .progress-bar > div { height: 100%; background: var(--primary); transition: width 0.3s; }
   .main { padding: 16px 24px; }
+  .warning-banner {
+    background: #fdf6ec; border: 1px solid #faecd8; color: #b88230;
+    padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: none;
+  }
+  .warning-banner.show { display: block; }
+  .warning-banner.error { background: #fef0f0; border-color: #fde2e2; color: #c45656; }
   .input-box {
     background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
     padding: 12px 16px; margin-bottom: 12px;
@@ -50,7 +56,25 @@
     font-weight: 600; display: flex; justify-content: space-between; align-items: center;
   }
   .pane-header .variant { color: var(--primary); }
+  .pane-header .format { color: var(--text-sub); font-size: 12px; font-weight: normal; }
   .pane iframe { width: 100%; flex: 1; border: none; background: white; }
+  /* PPTX 缩略图网格 */
+  .pane-body { flex: 1; overflow: auto; padding: 8px; background: #fafbfc; }
+  .thumb-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+  }
+  .thumb {
+    background: white; border: 1px solid var(--border); border-radius: 4px;
+    cursor: pointer; overflow: hidden; transition: all 0.15s; position: relative;
+  }
+  .thumb:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(64,158,255,0.15); }
+  .thumb img { width: 100%; display: block; }
+  .thumb-label {
+    position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.6); color: white;
+    padding: 2px 6px; border-radius: 3px; font-size: 11px;
+  }
+  .pane-error { padding: 24px; text-align: center; color: var(--danger); }
   .actions {
     background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
     padding: 16px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -70,7 +94,6 @@
   .btn-primary { background: var(--primary); color: white; }
   .btn-primary:hover { background: #66b1ff; }
   .btn-primary:disabled { background: #c0c4cc; cursor: not-allowed; }
-  .btn-success { background: var(--success); color: white; }
   .btn-warning { background: var(--warning); color: white; }
   .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-sub); }
   .stats {
@@ -97,6 +120,28 @@
     border-radius: 3px; font-family: monospace; font-size: 12px;
   }
   .hint { color: var(--text-sub); font-size: 12px; }
+  /* 灯箱 */
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000;
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+  }
+  .lightbox.show { display: flex; }
+  .lightbox img { max-width: 92vw; max-height: 85vh; box-shadow: 0 8px 32px rgba(0,0,0,0.5); background: white; }
+  .lightbox-controls {
+    color: white; padding: 12px; display: flex; gap: 16px; align-items: center;
+    font-size: 14px;
+  }
+  .lightbox-controls button {
+    background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 14px;
+  }
+  .lightbox-controls button:hover { background: rgba(255,255,255,0.25); }
+  .lightbox-close {
+    position: absolute; top: 16px; right: 16px; color: white; font-size: 28px;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+    width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,0.2); }
 </style>
 </head>
 <body>
@@ -111,9 +156,11 @@
 </div>
 
 <div class="main" id="app">
+  <div id="warning-banner" class="warning-banner"></div>
+
   <div id="empty-state" class="empty" style="display: none;">
     <h2>没有可用的 case</h2>
-    <p>请在 <code>cases/</code> 目录下创建子目录，每个子目录包含 <code>input.txt</code> + <code>a.html</code> + <code>b.html</code></p>
+    <p>请在 <code>cases/</code> 目录下创建子目录，每个子目录包含 <code>input.txt</code> + <code>a.{html|pptx}</code> + <code>b.{html|pptx}</code></p>
   </div>
 
   <div id="case-area" style="display: none;">
@@ -124,12 +171,18 @@
 
     <div class="compare-grid">
       <div class="pane">
-        <div class="pane-header"><span class="variant">方案 A</span><span class="hint">← 选 A</span></div>
-        <iframe id="iframe-a"></iframe>
+        <div class="pane-header">
+          <span class="variant">方案 A</span>
+          <span class="format" id="format-a"></span>
+        </div>
+        <div class="pane-body" id="pane-a"></div>
       </div>
       <div class="pane">
-        <div class="pane-header"><span class="variant">方案 B</span><span class="hint">选 B →</span></div>
-        <iframe id="iframe-b"></iframe>
+        <div class="pane-header">
+          <span class="variant">方案 B</span>
+          <span class="format" id="format-b"></span>
+        </div>
+        <div class="pane-body" id="pane-b"></div>
       </div>
     </div>
 
@@ -172,22 +225,65 @@
 
 <div class="toast" id="toast">已记录</div>
 
+<!-- 灯箱 -->
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightbox-close">×</button>
+  <img id="lightbox-img" alt="放大查看" />
+  <div class="lightbox-controls">
+    <button id="lb-prev">← 上一页</button>
+    <span id="lb-info">1 / 1</span>
+    <button id="lb-next">下一页 →</button>
+    <span class="hint" style="color: rgba(255,255,255,0.5); margin-left: 16px;">ESC 关闭</span>
+  </div>
+</div>
+
 <script>
 // ============== 状态 ==============
 const state = {
   cases: [],
   pending: [],
   currentCase: null,
+  currentVariants: { a: null, b: null },  // {type: 'html'|'pptx', payload: ...}
   selectedConfidence: null,
   results: { selections: [], metadata: {} },
   chart: null,
+  // 灯箱
+  lightbox: { open: false, variant: null, pages: [], currentIndex: 0 },
 };
 
 // ============== API 调用 ==============
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
-  return res.json();
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API ${path} failed: ${res.status} - ${text.slice(0, 200)}`);
+  }
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return res.text();
+}
+
+async function checkHealth() {
+  try {
+    const data = await api('/api/health');
+    const banner = document.getElementById('warning-banner');
+    if (!data.ready) {
+      const missing = [];
+      if (!data.libreoffice.available) missing.push('LibreOffice');
+      if (!data.pymupdf.available) missing.push('PyMuPDF');
+      banner.textContent = `⚠️ 检测到 ${data.pptx_case_count} 个 PPTX case，但依赖缺失：${missing.join('、')}。HTML case 不受影响，PPTX 渲染将失败。` +
+        '\n' + (data.libreoffice.message || '');
+      banner.classList.add('show', 'error');
+    } else if (data.pptx_case_count > 0) {
+      banner.textContent = `ℹ️ 当前有 ${data.pptx_case_count} 个 PPTX case，已自动启用 LibreOffice 渲染。`;
+      banner.classList.add('show');
+      banner.classList.remove('error');
+    } else {
+      banner.classList.remove('show', 'error');
+    }
+  } catch (e) {
+    console.warn('health check failed', e);
+  }
 }
 
 async function loadCases() {
@@ -205,6 +301,26 @@ async function loadResults() {
 async function loadInput(caseId) {
   const data = await api(`/api/case/${caseId}/input`);
   document.getElementById('input-content').textContent = data.input || '（无输入）';
+}
+
+async function loadVariant(caseId, variant) {
+  // HTML 走 text/html，PPTX 走 JSON
+  // 用 Accept 头让 server 知道我们想要什么？不需要——server 自己判断文件类型
+  const url = `/api/case/${caseId}/render/${variant}`;
+  // 先尝试 fetch 看 content-type
+  const res = await fetch(url);
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    const data = await res.json();
+    if (data.error) {
+      return { type: 'error', message: data.message || 'unknown' };
+    }
+    return { type: data.type, payload: data };
+  } else {
+    // HTML：把内容放到 src doc 里
+    const html = await res.text();
+    return { type: 'html', payload: html };
+  }
 }
 
 // ============== 渲染 ==============
@@ -248,18 +364,118 @@ function showEmpty() {
   document.getElementById('case-area').style.display = 'none';
 }
 
-function showCase() {
+function renderVariant(variant) {
+  // 渲染到 pane-body
+  const data = state.currentVariants[variant];
+  const pane = document.getElementById(`pane-${variant}`);
+  const formatLabel = document.getElementById(`format-${variant}`);
+
+  if (!data) {
+    pane.innerHTML = '<div class="pane-error">未加载</div>';
+    return;
+  }
+
+  if (data.type === 'html') {
+    formatLabel.textContent = 'HTML 渲染';
+    // 用 iframe
+    pane.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width:100%; height:100%; border:none; background:white;';
+    // 用 srcdoc 注入 HTML（避免 src 跨域）
+    iframe.srcdoc = data.payload;
+    pane.style.padding = '0';
+    pane.appendChild(iframe);
+  } else if (data.type === 'pptx') {
+    formatLabel.textContent = `PPTX · ${data.payload.page_count} 页`;
+    pane.style.padding = '8px';
+    // 缩略图网格
+    const grid = document.createElement('div');
+    grid.className = 'thumb-grid';
+    data.payload.pages.forEach((page, idx) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      thumb.innerHTML = `
+        <span class="thumb-label">第 ${page.page} 页</span>
+        <img src="${page.url}" alt="第 ${page.page} 页" loading="lazy" />
+      `;
+      thumb.onclick = () => openLightbox(variant, idx);
+      grid.appendChild(thumb);
+    });
+    pane.innerHTML = '';
+    pane.appendChild(grid);
+    // 提示文字
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.style.cssText = 'margin-top:8px; text-align:center;';
+    hint.textContent = `共 ${data.payload.page_count} 页，点击缩略图放大查看`;
+    pane.appendChild(hint);
+  } else if (data.type === 'error') {
+    formatLabel.textContent = '错误';
+    pane.style.padding = '24px';
+    pane.innerHTML = `<div class="pane-error">❌ ${data.message}</div>`;
+  }
+}
+
+async function showCase() {
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('case-area').style.display = 'block';
-  document.getElementById('iframe-a').src = `/api/case/${state.currentCase}/render/a`;
-  document.getElementById('iframe-b').src = `/api/case/${state.currentCase}/render/b`;
-  loadInput(state.currentCase);
+  // 找当前 case 的格式信息
+  const caseMeta = state.cases.find(c => c.case_id === state.currentCase);
+  await loadInput(state.currentCase);
+  // 并发加载 A 和 B
+  state.currentVariants.a = await loadVariant(state.currentCase, 'a');
+  state.currentVariants.b = await loadVariant(state.currentCase, 'b');
+  renderVariant('a');
+  renderVariant('b');
   // 重置信心度
   state.selectedConfidence = null;
   document.querySelectorAll('.confidence button').forEach(b => b.classList.remove('selected'));
-  document.getElementById('btn-choose-a').disabled = true;
-  document.getElementById('btn-choose-b').disabled = true;
+  document.getElementById('btn-choose-a').disabled = false;
+  document.getElementById('btn-choose-b').disabled = false;
 }
+
+// ============== 灯箱 ==============
+function openLightbox(variant, pageIdx) {
+  const data = state.currentVariants[variant];
+  if (!data || data.type !== 'pptx') return;
+  state.lightbox.open = true;
+  state.lightbox.variant = variant;
+  state.lightbox.pages = data.payload.pages;
+  state.lightbox.currentIndex = pageIdx;
+  updateLightbox();
+  document.getElementById('lightbox').classList.add('show');
+}
+
+function closeLightbox() {
+  state.lightbox.open = false;
+  document.getElementById('lightbox').classList.remove('show');
+}
+
+function lightboxPrev() {
+  if (!state.lightbox.open) return;
+  state.lightbox.currentIndex = (state.lightbox.currentIndex - 1 + state.lightbox.pages.length) % state.lightbox.pages.length;
+  updateLightbox();
+}
+
+function lightboxNext() {
+  if (!state.lightbox.open) return;
+  state.lightbox.currentIndex = (state.lightbox.currentIndex + 1) % state.lightbox.pages.length;
+  updateLightbox();
+}
+
+function updateLightbox() {
+  const pages = state.lightbox.pages;
+  const cur = state.lightbox.currentIndex;
+  document.getElementById('lightbox-img').src = pages[cur].url;
+  document.getElementById('lb-info').textContent = `第 ${pages[cur].page} 页 / 共 ${pages.length} 页`;
+}
+
+document.getElementById('lightbox-close').onclick = closeLightbox;
+document.getElementById('lb-prev').onclick = lightboxPrev;
+document.getElementById('lb-next').onclick = lightboxNext;
+document.getElementById('lightbox').onclick = (e) => {
+  if (e.target.id === 'lightbox') closeLightbox();
+};
 
 // ============== 交互 ==============
 async function nextCase() {
@@ -275,7 +491,7 @@ async function nextCase() {
     return;
   }
   state.currentCase = state.pending[0];
-  showCase();
+  await showCase();
 }
 
 async function choose(variant) {
@@ -294,12 +510,11 @@ async function choose(variant) {
 }
 
 async function skip() {
-  // 跳过 = 把当前 case 移到 pending 末尾
   if (!state.currentCase) return;
   state.pending.push(state.pending.shift());
   if (state.pending.length > 0) {
     state.currentCase = state.pending[0];
-    showCase();
+    await showCase();
   }
 }
 
@@ -320,13 +535,18 @@ document.querySelectorAll('.confidence button').forEach(btn => {
     state.selectedConfidence = parseInt(btn.dataset.c);
     document.querySelectorAll('.confidence button').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
-    document.getElementById('btn-choose-a').disabled = false;
-    document.getElementById('btn-choose-b').disabled = false;
   };
 });
 
 // 键盘快捷键
 document.addEventListener('keydown', (e) => {
+  // 灯箱打开时优先级
+  if (state.lightbox.open) {
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') lightboxPrev();
+    else if (e.key === 'ArrowRight') lightboxNext();
+    return;
+  }
   if (e.key === 'ArrowLeft') choose('A');
   else if (e.key === 'ArrowRight') choose('B');
   else if (e.key === ' ') { e.preventDefault(); skip(); }
@@ -334,6 +554,7 @@ document.addEventListener('keydown', (e) => {
 
 // ============== 启动 ==============
 (async () => {
+  await checkHealth();
   await loadCases();
   await loadResults();
   if (state.cases.length === 0) {

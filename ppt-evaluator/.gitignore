@@ -13,6 +13,9 @@ results/report.md
 results/report.html
 results/summary.json
 
+# PPTX 渲染缓存
+.cache/
+
 # 临时备份
 *.bak
 

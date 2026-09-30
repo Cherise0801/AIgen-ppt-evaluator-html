@@ -2,22 +2,24 @@
 
 用于"人工盲测"和"AI vs 人工对比分析"的本地程序，不依赖任何外部服务。
 
+支持两种 case 格式：**HTML**（直接 iframe 渲染）和 **PPTX**（LibreOffice 转 PNG）。
+
 ## 工作流程
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│  1. 准备 cases                                         │
+│  1. 准备 cases（HTML 或 PPTX 均可，混用也行）           │
 │     - 每个 case 一个子目录                             │
 │     - 含 input.txt（输入描述）                          │
-│     - 含 a.html（方案 A 生成结果）                      │
-│     - 含 b.html（方案 B 生成结果）                      │
+│     - 含 a.{html|pptx}（方案 A）                       │
+│     - 含 b.{html|pptx}（方案 B）                       │
 └────────────────────────────────────────────────────────┘
                           ↓
 ┌────────────────────────────────────────────────────────┐
 │  2. 启动 server.py                                     │
 │     python tools/server.py                             │
 │     → 浏览器打开 http://127.0.0.1:5050                  │
-│     → 两两对比界面，点击 A 或 B 完成盲测                │
+│     → HTML 走 iframe，PPTX 走缩略图网格 + 点击放大      │
 │     → 结果自动存到 results/human_results.json           │
 └────────────────────────────────────────────────────────┘
                           ↓
@@ -38,45 +40,98 @@
 
 ## 安装
 
-```bash
-# 依赖：Python 3.8+ 和 Flask
-pip install flask
+### 基础依赖（HTML 模式必需）
 
-# 启动服务
+```bash
+pip install flask
+```
+
+### PPTX 渲染依赖（PPTX 模式必需）
+
+```bash
+# 1. PyMuPDF（PDF → PNG）
+pip install pymupdf
+
+# 2. LibreOffice（PPTX → PDF）
+# macOS
+brew install --cask libreoffice
+# Ubuntu/Debian
+sudo apt install -y libreoffice
+# Windows：官网下载 https://www.libreoffice.org/download/
+```
+
+**PPTX 模式是可选的**：
+- 没装 LibreOffice/PyMuPDF：HTML case 正常用，PPTX case 渲染会失败并在 UI 上提示
+- 装好之后：无需改代码，server.py 启动时自动检测；首次访问 PPTX case 时转换并缓存到 `.cache/`
+
+### 启动服务
+
+```bash
 python tools/server.py
 # → 浏览器访问 http://127.0.0.1:5050
 ```
 
 可选参数：
 - `--port 5050`：自定义端口
+- `--host 0.0.0.0`：允许局域网访问（默认 127.0.0.1）
 - `--cases ../cases`：自定义 cases 目录
 - `--results ../results`：自定义结果目录
+- `--cache ../.cache`：自定义 PPTX 缓存目录
 
 ## 准备 cases
 
-每个 case 是一个子目录：
+每个 case 是一个子目录，A 和 B 各自**至少一个** HTML 或 PPTX 文件：
 
 ```
 cases/
-├── case-001/
-│   ├── input.txt    # 输入描述（给用户看的 prompt）
-│   ├── a.html       # 方案 A 的生成结果
-│   └── b.html       # 方案 B 的生成结果
-├── case-002/
+├── case-001/                     # 纯 HTML case
 │   ├── input.txt
 │   ├── a.html
 │   └── b.html
-└── ...
+├── case-002/                     # 纯 PPTX case
+│   ├── input.txt
+│   ├── a.pptx
+│   └── b.pptx
+└── case-003/                     # 混合 case（A 用 PPTX，B 用 HTML）
+    ├── input.txt
+    ├── a.pptx
+    └── b.html
 ```
 
-`a.html` 和 `b.html` 是**同一输入下两个不同来源的生成结果**（如：同一 prompt，模型 A 生成 vs 模型 B 生成，或人做 vs AI 生成）。盲测时**不告诉用户**哪份是哪个来源。
+**规则**：
+- `a` 和 `b` 各自至少存在 `.html` 或 `.pptx` 中的一个
+- HTML 优先：若 `a.html` 和 `a.pptx` 同时存在，使用 `a.html`
+- `a.html` / `a.pptx` 是**同一输入下两个不同来源的生成结果**（如：同一 prompt，模型 A 生成 vs 模型 B 生成，或人做 vs AI 生成）
+- 盲测时**不告诉用户**哪份是哪个来源
 
 ## 人工盲测界面
 
-- 左 A 右 B 双栏布局，通过 iframe 渲染真实的 HTML PPT
-- 键盘快捷键：`←` 选 A，`→` 选 B，`Space` 跳过
+### HTML 模式
+左 A 右 B 双栏布局，通过 iframe 渲染真实的 HTML PPT。
+
+### PPTX 模式
+左 A 右 B 双栏布局，每栏内是该 PPT 的**缩略图网格**（每页一张），点击缩略图弹出全屏灯箱查看大图，灯箱内可用 `←` / `→` 翻页、`Esc` 关闭。
+
+### 通用
+- 盲测选择按钮：**`←` 选 A，`→` 选 B，`Space` 跳过**
 - 可选信心度（1-5），用于分析"人在不同信心度下 AI 一致率"
-- 进度可视化（echarts 饼图）
+- 进度可视化（echarts 饼图 + 顶部进度条）
+- 顶部告警横幅：检测到 PPTX case 但 LibreOffice 缺失时显示提示
+
+## PPTX 渲染细节
+
+**流程**：`a.pptx` → `soffice --headless --convert-to pdf` → `a.pdf` → PyMuPDF 逐页渲染 → `page_NN.png`（150 DPI）
+
+**缓存**：转换结果缓存到 `tools/.cache/<case_id>/<variant>/<hash>/`，基于源文件 mtime + size 生成 hash。文件不变不重转。
+
+**性能参考**（5 页 PPT）：
+- 首次转换：~5-10 秒
+- 缓存命中：~50 毫秒
+
+**已知局限**：
+- 复杂动画会丢失（PPT 转 PDF 时本就不保留）
+- 部分特殊字体可能回退到默认字体
+- 极复杂的 SmartArt 可能简化
 
 ## AI 测评结果格式
 
@@ -105,7 +160,7 @@ cases/
         },
         "B": {
           "total": 7.2,
-          "by_dim": { ... }
+          "by_dim": { "...": "..." }
         }
       },
       "confidence": 4,

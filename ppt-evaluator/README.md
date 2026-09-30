@@ -13,6 +13,7 @@
 - **A/B 盲测**：两份 PPT 背对背对比，AI 评分二选一 + 人工确认，支持全文级和单页级
 - **版面合规检查**：爆版（溢出边界）、叠版（元素遮挡）自动扣分
 - **版式多样性评估**：检查全文版式丰富度，避免千篇一律
+- **支持 HTML 和 PPTX 两种输入格式**（PPTX 走 LibreOffice 渲染为每页 PNG）
 
 ### 本地校准工具（tools/）
 - **人工盲测界面**：本地 Flask 服务，两两对比 + 自动渲染 + 进度可视化
@@ -54,11 +55,12 @@ npx skills add 你的用户名/ppt-evaluator
 详见 [tools/README.md](tools/README.md)。
 
 ```bash
-# 1. 准备 cases（每个 case 一个子目录，含 input.txt + a.html + b.html）
+# 1. 准备 cases（每个 case 一个子目录，含 input.txt + a.{html|pptx} + b.{html|pptx}）
 ls cases/case-001/
 
 # 2. 启动人工盲测界面
-pip install flask
+pip install flask pymupdf
+# PPTX 支持需额外安装 LibreOffice（详见 tools/README.md）
 python tools/server.py
 # → 浏览器打开 http://127.0.0.1:5050
 
@@ -85,8 +87,9 @@ ppt-evaluator/
 ├── evals/
 │   └── evals.json        # 自测用例 + 断言
 ├── tools/                # 本地校准工具
-│   ├── server.py         # Flask 启动 + 渲染
-│   ├── compare.html      # 两两对比界面
+│   ├── server.py         # Flask 启动 + 渲染（HTML + PPTX）
+│   ├── render_pptx.py    # LibreOffice + PyMuPDF 转 PPTX → PNG
+│   ├── compare.html      # 两两对比界面（iframe + 缩略图网格 + 灯箱）
 │   ├── analyze.py        # AI vs 人工对比分析
 │   ├── static/           # 静态依赖（echarts）
 │   └── README.md
