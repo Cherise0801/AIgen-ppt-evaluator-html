@@ -4,4 +4,4 @@
 2. [x] 更新 SKILL.md：同步 6 维评分模型与权重
 3. [x] 更新 ai_results.json：case-003 7.09 / case-004 7.41 / 胜者 case-004
 4. [x] 更新 README：同步架构变更
-5. [-] git 提交 + push
+5. [x] git 提交 + push
