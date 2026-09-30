@@ -1,0 +1,154 @@
+{
+  "skill_name": "ppt-evaluator",
+  "version": "1.0.0",
+  "description": "PPT 测评技能自测用例集，覆盖单份测评、A/B 盲测、版面合规扣分、版式多样性评估等核心场景",
+  "evals": [
+    {
+      "id": 1,
+      "name": "single-eval-basic",
+      "prompt": "帮我测评一下这份 PPT。这是一份产品介绍 PPT，共 8 页，HTML 代码如下：<html><body><div class=\"slide\"><h1>产品介绍</h1><p>我们的产品很好</p></div><div class=\"slide\"><h2>功能特性</h2><ul><li>功能1</li><li>功能2</li></ul></div></body></html>",
+      "expected_output": "输出包含 7 维得分表、加权总分（10 分制）、百分制、关键问题清单、改进建议",
+      "assertions": [
+        {
+          "text": "输出包含 7 个维度的得分（内容质量、结构逻辑、视觉设计、表达传达、技术规范、版面合规、版式多样性）",
+          "type": "contains_all"
+        },
+        {
+          "text": "加权总分在 0-10 分之间",
+          "type": "range_check"
+        },
+        {
+          "text": "包含百分制分数",
+          "type": "contains"
+        },
+        {
+          "text": "包含关键问题清单",
+          "type": "contains"
+        },
+        {
+          "text": "包含改进建议",
+          "type": "contains"
+        },
+        {
+          "text": "每个维度得分有具体依据（引用页面或元素）",
+          "type": "contains"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "blind-test-full",
+      "prompt": "我有两份 PPT 想做 A/B 盲测对比。方案 A 是 10 页的产品发布 PPT，方案 B 是 8 页的产品介绍 PPT，都是 HTML 格式。请帮我做全文级盲测。",
+      "expected_output": "输出盲测报告，包含标识隐去声明、两份 PPT 的 7 维得分对比、加权总分对比、AI 二选一判断、用户确认选项、关键差异分析",
+      "assertions": [
+        {
+          "text": "包含标识隐去声明",
+          "type": "contains"
+        },
+        {
+          "text": "包含方案 A 和方案 B 的得分对比表",
+          "type": "contains_all"
+        },
+        {
+          "text": "包含 AI 二选一判断及依据",
+          "type": "contains"
+        },
+        {
+          "text": "包含用户确认选项（同意/推翻/需更多信息）",
+          "type": "contains_all"
+        },
+        {
+          "text": "包含关键差异分析（哪些维度拉开差距）",
+          "type": "contains"
+        },
+        {
+          "text": "包含对败方的改进建议",
+          "type": "contains"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "blind-test-page",
+      "prompt": "我想对比两份 PPT 的第 3 页，看看哪一页排版更好。方案 A 第 3 页是左右对比布局，方案 B 第 3 页是上下布局。请做单页级盲测。",
+      "expected_output": "输出单页级盲测报告，使用单页权重（版式多样性不适用，其余 6 维重新分配），包含单页关键差异点分析",
+      "assertions": [
+        {
+          "text": "明确说明使用单页级盲测",
+          "type": "contains"
+        },
+        {
+          "text": "版式多样性维度不适用，其余 6 维权重重新分配（内容质量 22%、结构逻辑 18%、视觉设计 22%、表达传达 18%、技术规范 9%、版面合规 11%）",
+          "type": "contains_all"
+        },
+        {
+          "text": "包含单页关键差异点分析（版式布局、信息密度、视觉层次、表达传达、版面合规）",
+          "type": "contains_all"
+        },
+        {
+          "text": "包含 AI 二选一判断",
+          "type": "contains"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "layout-violation-deduction",
+      "prompt": "帮我检查这份 PPT 有没有爆版和叠版问题。第 2 页标题和正文重叠了，第 4 页图片超出边界了，第 5 页有两个元素叠在一起。",
+      "expected_output": "版面合规维度按扣分制评分：基础 10 分，3 处问题扣 6 分，得 4 分；明确指出每处问题的类型和位置",
+      "assertions": [
+        {
+          "text": "明确标注爆版问题（第 4 页图片超出边界）",
+          "type": "contains"
+        },
+        {
+          "text": "明确标注叠版问题（第 2 页标题正文重叠、第 5 页元素叠压）",
+          "type": "contains_all"
+        },
+        {
+          "text": "版面合规得分 = max(10 - 3×2, 0) = 4 分",
+          "type": "calculation"
+        },
+        {
+          "text": "每处问题有具体描述（页面 + 元素 + 问题类型）",
+          "type": "contains"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "layout-diversity-eval",
+      "prompt": "这份 PPT 共 6 页，第 1 页是标题页，第 2-5 页都是标题+正文的内容页，第 6 页是结尾页。帮我评估版式多样性。",
+      "expected_output": "版式多样性维度评分偏低（3-5 分），指出中间 4 页版式雷同，建议为对比内容/数据内容采用差异化版式",
+      "assertions": [
+        {
+          "text": "识别出版式类型数量（3 种：标题页、内容页、结尾页）",
+          "type": "contains"
+        },
+        {
+          "text": "指出中间 4 页版式雷同",
+          "type": "contains"
+        },
+        {
+          "text": "版式多样性得分在 3-5 分之间",
+          "type": "range_check"
+        },
+        {
+          "text": "建议为不同类型内容采用差异化版式",
+          "type": "contains"
+        }
+      ],
+      "files": []
+    }
+  ],
+  "metadata": {
+    "created_by": "ppt-evaluator skill creator",
+    "created_at": "2026-09-30",
+    "scoring_scale": "10-point",
+    "dimensions_count": 7
+  }
+}
