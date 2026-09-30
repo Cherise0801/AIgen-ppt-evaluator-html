@@ -12,7 +12,9 @@
 ## 功能与信息架构
 三个核心命令：
 - `/ppt-eval` 单份测评：输入 HTML+文本 → 多维加权评分 + 改进清单
-- `/ppt-blind` A/B 盲测：两份 PPT 隐去标识 → AI 评分二选一 + 人确认
+- `/ppt-blind` A/B 盲测：两份 PPT 隐去标识 → AI 评分二选一 + 人确认。**支持两种粒度**：
+  - 全文 PPT 对比（整份 A vs 整份 B）
+  - 单页 PPT 对比（A 的某页 vs B 的对应页）
 - `/ppt-rubric` 查看/调整评分维度与权重
 
 ## 评分维度（5 维，默认权重）
@@ -30,11 +32,12 @@ ppt-evaluator/
 ├── SKILL.md              # 主指令 + 三命令路由
 ├── references/
 │   ├── rubric.md         # 5 维评分细则 + 1-5 分锚点
-│   ├── blind-test.md     # A/B 盲测协议
+│   ├── blind-test.md     # A/B 盲测协议（全文级 + 单页级两种粒度）
 │   └── examples.md       # 测评报告示例
 ├── templates/
-│   ├── score-report.md   # 评分报告模板
-│   └── blind-report.md   # 盲测报告模板
+│   ├── score-report.md   # 单份评分报告模板
+│   ├── blind-full.md     # 全文盲测报告模板
+│   └── blind-page.md     # 单页盲测报告模板
 ├── evals/
 │   └── evals.json        # 自测用例 + 断言
 └── README.md             # GitHub 仓库说明
