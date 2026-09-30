@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PPT 测评校准 - 人工盲测</title>
+<script src="/static/echarts.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --border: #e4e7ed;
+    --text: #303133;
+    --text-sub: #606266;
+    --primary: #409eff;
+    --success: #67c23a;
+    --warning: #e6a23c;
+    --danger: #f56c6c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  .topbar {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar h1 { font-size: 16px; margin: 0; }
+  .progress-info { display: flex; gap: 16px; align-items: center; color: var(--text-sub); }
+  .progress-bar { width: 200px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-bar > div { height: 100%; background: var(--primary); transition: width 0.3s; }
+  .main { padding: 16px 24px; }
+  .input-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px 16px; margin-bottom: 12px;
+  }
+  .input-box label { color: var(--text-sub); font-size: 12px; }
+  .input-box .content { margin-top: 4px; white-space: pre-wrap; }
+  .compare-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 70vh;
+  }
+  .pane {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .pane-header {
+    padding: 8px 12px; background: #fafbfc; border-bottom: 1px solid var(--border);
+    font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+  }
+  .pane-header .variant { color: var(--primary); }
+  .pane iframe { width: 100%; flex: 1; border: none; background: white; }
+  .actions {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 16px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  .confidence { display: flex; gap: 6px; align-items: center; }
+  .confidence button {
+    width: 36px; height: 36px; border: 1px solid var(--border); background: white;
+    border-radius: 4px; cursor: pointer; font-weight: 600;
+  }
+  .confidence button:hover { background: #ecf5ff; }
+  .confidence button.selected { background: var(--primary); color: white; border-color: var(--primary); }
+  .btn-row { display: flex; gap: 8px; }
+  .btn {
+    padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;
+    font-size: 14px; font-weight: 500; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: #66b1ff; }
+  .btn-primary:disabled { background: #c0c4cc; cursor: not-allowed; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-warning { background: var(--warning); color: white; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-sub); }
+  .stats {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 16px; margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+  }
+  .stat-card { text-align: center; }
+  .stat-card .num { font-size: 28px; font-weight: 700; color: var(--primary); }
+  .stat-card .label { color: var(--text-sub); font-size: 12px; margin-top: 4px; }
+  .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 12px; }
+  .chart { width: 100%; height: 220px; }
+  .toast {
+    position: fixed; top: 80px; right: 24px; background: var(--success); color: white;
+    padding: 10px 16px; border-radius: 4px; opacity: 0; transition: opacity 0.3s; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .empty {
+    text-align: center; padding: 60px 20px; color: var(--text-sub);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  }
+  .empty h2 { color: var(--text); }
+  .kbd {
+    display: inline-block; padding: 2px 6px; background: #f4f4f5; border: 1px solid #e4e7ed;
+    border-radius: 3px; font-family: monospace; font-size: 12px;
+  }
+  .hint { color: var(--text-sub); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🎯 PPT 测评校准 - 人工盲测</h1>
+  <div class="progress-info">
+    <span>进度</span>
+    <div class="progress-bar"><div id="progress-fill" style="width: 0%"></div></div>
+    <span id="progress-text">0 / 0</span>
+  </div>
+</div>
+
+<div class="main" id="app">
+  <div id="empty-state" class="empty" style="display: none;">
+    <h2>没有可用的 case</h2>
+    <p>请在 <code>cases/</code> 目录下创建子目录，每个子目录包含 <code>input.txt</code> + <code>a.html</code> + <code>b.html</code></p>
+  </div>
+
+  <div id="case-area" style="display: none;">
+    <div class="input-box">
+      <label>📝 输入（同一 prompt）</label>
+      <div class="content" id="input-content"></div>
+    </div>
+
+    <div class="compare-grid">
+      <div class="pane">
+        <div class="pane-header"><span class="variant">方案 A</span><span class="hint">← 选 A</span></div>
+        <iframe id="iframe-a"></iframe>
+      </div>
+      <div class="pane">
+        <div class="pane-header"><span class="variant">方案 B</span><span class="hint">选 B →</span></div>
+        <iframe id="iframe-b"></iframe>
+      </div>
+    </div>
+
+    <div class="actions">
+      <div class="confidence">
+        <span class="hint">信心度：</span>
+        <button data-c="1">1</button>
+        <button data-c="2">2</button>
+        <button data-c="3">3</button>
+        <button data-c="4">4</button>
+        <button data-c="5">5</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-warning" id="btn-skip">⏭ 跳过</button>
+        <button class="btn btn-primary" id="btn-choose-a" disabled>选 A (←)</button>
+        <button class="btn btn-primary" id="btn-choose-b" disabled>选 B (→)</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="num" id="stat-completed">0</div>
+        <div class="label">已完成</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="stat-pending">0</div>
+        <div class="label">待评估</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="stat-a-ratio">-</div>
+        <div class="label">A 胜出率</div>
+      </div>
+    </div>
+
+    <div class="chart-box">
+      <div id="chart-progress" class="chart"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">已记录</div>
+
+<script>
+// ============== 状态 ==============
+const state = {
+  cases: [],
+  pending: [],
+  currentCase: null,
+  selectedConfidence: null,
+  results: { selections: [], metadata: {} },
+  chart: null,
+};
+
+// ============== API 调用 ==============
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
+  return res.json();
+}
+
+async function loadCases() {
+  const data = await api('/api/cases');
+  state.cases = data.cases;
+}
+
+async function loadResults() {
+  state.results = await api('/api/results');
+  state.pending = state.results.pending_case_ids;
+  updateStats();
+  renderChart();
+}
+
+async function loadInput(caseId) {
+  const data = await api(`/api/case/${caseId}/input`);
+  document.getElementById('input-content').textContent = data.input || '（无输入）';
+}
+
+// ============== 渲染 ==============
+function updateStats() {
+  const total = state.cases.length;
+  const completed = state.results.completed_case_ids.length;
+  const pending = state.pending.length;
+  const aCount = state.results.selections.filter(s => s.chosen === 'A').length;
+  const aRatio = completed > 0 ? Math.round((aCount / completed) * 100) + '%' : '-';
+
+  document.getElementById('stat-completed').textContent = completed;
+  document.getElementById('stat-pending').textContent = pending;
+  document.getElementById('stat-a-ratio').textContent = aRatio;
+
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-text').textContent = `${completed} / ${total}`;
+}
+
+function renderChart() {
+  if (!state.chart) state.chart = echarts.init(document.getElementById('chart-progress'));
+  const completed = state.results.completed_case_ids.length;
+  const pending = state.pending.length;
+  state.chart.setOption({
+    title: { text: '盲测进度', left: 'left', textStyle: { fontSize: 14, fontWeight: 'normal' } },
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0, left: 'center' },
+    series: [{
+      type: 'pie', radius: ['50%', '70%'], avoidLabelOverlap: false,
+      label: { show: true, formatter: '{b}: {c}' },
+      data: [
+        { value: completed, name: '已完成', itemStyle: { color: '#67c23a' } },
+        { value: pending, name: '待评估', itemStyle: { color: '#e4e7ed' } },
+      ]
+    }]
+  });
+}
+
+function showEmpty() {
+  document.getElementById('empty-state').style.display = 'block';
+  document.getElementById('case-area').style.display = 'none';
+}
+
+function showCase() {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('case-area').style.display = 'block';
+  document.getElementById('iframe-a').src = `/api/case/${state.currentCase}/render/a`;
+  document.getElementById('iframe-b').src = `/api/case/${state.currentCase}/render/b`;
+  loadInput(state.currentCase);
+  // 重置信心度
+  state.selectedConfidence = null;
+  document.querySelectorAll('.confidence button').forEach(b => b.classList.remove('selected'));
+  document.getElementById('btn-choose-a').disabled = true;
+  document.getElementById('btn-choose-b').disabled = true;
+}
+
+// ============== 交互 ==============
+async function nextCase() {
+  if (state.pending.length === 0) {
+    state.currentCase = null;
+    document.getElementById('case-area').style.display = 'none';
+    document.getElementById('empty-state').innerHTML = `
+      <h2>🎉 全部完成！</h2>
+      <p>已完成 ${state.results.completed_case_ids.length} 个 case 的人工盲测</p>
+      <p>下一步：用本 Skill 跑 AI 测评，然后执行 <code>python tools/analyze.py</code> 生成对比报告</p>
+    `;
+    document.getElementById('empty-state').style.display = 'block';
+    return;
+  }
+  state.currentCase = state.pending[0];
+  showCase();
+}
+
+async function choose(variant) {
+  if (!state.currentCase) return;
+  await api('/api/select', {
+    method: 'POST',
+    body: JSON.stringify({
+      case_id: state.currentCase,
+      chosen: variant,
+      confidence: state.selectedConfidence,
+    })
+  });
+  showToast(`已选择方案 ${variant}`);
+  await loadResults();
+  await nextCase();
+}
+
+async function skip() {
+  // 跳过 = 把当前 case 移到 pending 末尾
+  if (!state.currentCase) return;
+  state.pending.push(state.pending.shift());
+  if (state.pending.length > 0) {
+    state.currentCase = state.pending[0];
+    showCase();
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// 事件绑定
+document.getElementById('btn-choose-a').onclick = () => choose('A');
+document.getElementById('btn-choose-b').onclick = () => choose('B');
+document.getElementById('btn-skip').onclick = skip;
+
+document.querySelectorAll('.confidence button').forEach(btn => {
+  btn.onclick = () => {
+    state.selectedConfidence = parseInt(btn.dataset.c);
+    document.querySelectorAll('.confidence button').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('btn-choose-a').disabled = false;
+    document.getElementById('btn-choose-b').disabled = false;
+  };
+});
+
+// 键盘快捷键
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') choose('A');
+  else if (e.key === 'ArrowRight') choose('B');
+  else if (e.key === ' ') { e.preventDefault(); skip(); }
+});
+
+// ============== 启动 ==============
+(async () => {
+  await loadCases();
+  await loadResults();
+  if (state.cases.length === 0) {
+    showEmpty();
+  } else {
+    await nextCase();
+  }
+})();
+</script>
+
+</body>
+</html>
