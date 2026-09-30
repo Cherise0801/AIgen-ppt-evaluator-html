@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>年度关键成果集中呈现</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --bg-page:#F0F4F8;--bg-elevated:#FFFFFF;--bg-card:#F6F9FC;
+    --text-body:#1D4E6E;--text-strong:#1D4E6E;--text-muted:#6E8CA3;
+    --primary:#3D8FE0;--secondary:#46C276;--tertiary:#7B9FDd;
+    --primary-container:#DCEAF9;--border:rgba(61,143,224,.18);--divider:rgba(61,143,224,.12);
+    --shadow-md:0 6px 24px rgba(61,143,224,.12),0 2px 6px rgba(61,143,224,.06);
+  }
+  body{background:#e9e9e9;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:"PingFang SC","Microsoft YaHei","MiSans Normal",system-ui,sans-serif;overflow:hidden;}
+  .infographic-slide{position:relative;width:1280px;height:720px;background:var(--bg-page);overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.15);}
+  .main-title{position:absolute;left:48px;top:24px;font-size:34px;font-weight:800;color:var(--text-strong);letter-spacing:2px;}
+  .accent-bar{position:absolute;left:48px;top:70px;width:120px;height:5px;border-radius:3px;background:linear-gradient(90deg,var(--primary),var(--secondary));}
+  .sub-title{position:absolute;left:48px;top:84px;right:60px;font-size:14px;color:var(--text-muted);letter-spacing:.3px;line-height:1.6;max-width:1180px;}
+  .stats{position:absolute;top:120px;left:48px;width:1184px;height:56px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;box-shadow:var(--shadow-md);}
+  .st{flex:1;display:flex;align-items:baseline;justify-content:center;gap:8px;}
+  .st b{font-size:22px;font-weight:800;color:var(--text-strong);}
+  .st span{font-size:13px;color:var(--text-muted);}
+  .dv{width:1px;height:28px;background:var(--divider);}
+  .card{position:absolute;top:196px;width:284px;height:420px;border-radius:10px;overflow:hidden;box-shadow:var(--shadow-md);}
+  .card-h{height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .icon{width:46px;height:46px;border:3px solid rgba(255,255,255,.85);border-radius:50%;display:flex;align-items:center;justify-content:center;}
+  .card-h h3{margin-top:6px;font-size:18px;font-weight:700;color:#ffffff;letter-spacing:2px;}
+  .card-b{height:262px;background:var(--bg-card);padding:12px 12px 0;}
+  .bar{background:var(--primary);color:#ffffff;font-size:13px;font-weight:700;text-align:center;line-height:26px;height:26px;border-radius:4px;letter-spacing:3px;}
+  .card-b ul{list-style:none;margin-top:4px;}
+  .mi{min-height:55px;display:flex;align-items:center;border-bottom:1px dashed rgba(61,143,224,.35);padding:3px 0;}
+  .mi:last-child{border-bottom:none;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--secondary);flex:none;margin-right:7px;}
+  .md{flex:1;font-size:11.5px;line-height:1.5;color:#4A7088;}
+  .card-f{position:relative;height:62px;background:var(--bg-elevated);}
+  .flag{position:absolute;left:0;top:0;width:100%;height:100%;clip-path:polygon(0 0,100% 0,100% 100%,0 100%);}
+  .prog{position:absolute;right:14px;top:50%;transform:translateY(-50%);white-space:nowrap;color:var(--text-strong);}
+  .prog .lb{font-size:14px;font-weight:700;}
+  .prog .num{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-left:8px;}
+  .c1 .card-h,.c1 .flag{background:var(--primary);}
+  .c2 .card-h,.c2 .flag{background:var(--tertiary);}
+  .c3 .card-h,.c3 .flag{background:var(--secondary);}
+  .c4 .card-h,.c4 .flag{background:var(--primary);}
+  .timeline{position:absolute;left:48px;top:648px;width:1184px;height:58px;}
+  .tl-line{position:absolute;left:8px;right:14px;top:11px;height:5px;border-radius:3px;background:linear-gradient(90deg,var(--primary) 0%,var(--tertiary) 35%,var(--secondary) 70%,var(--primary) 100%);}
+  .tl-arrow{position:absolute;right:-4px;top:5px;width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-left:15px solid var(--primary);}
+  .tn{position:absolute;top:0;width:28px;height:28px;border-radius:50%;background:#ffffff;border:4px solid var(--primary);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(61,143,224,.3);}
+  .tn i{width:8px;height:8px;border-radius:50%;display:block;}
+  .tl{position:absolute;top:36px;width:220px;text-align:center;font-size:12px;color:var(--text-muted);letter-spacing:.5px;}
+  .tl b{color:var(--text-strong);margin-right:2px;}
+</style>
+</head>
+<body>
+<div class="infographic-slide" data-infographic="true">
+  <div class="main-title">年度关键成果集中呈现</div>
+  <div class="accent-bar"></div>
+  <div class="sub-title">围绕重点任务，全年形成四个方面的系统性工作沉淀，各项成果均有明确进度标记，便于总览与追溯。</div>
+  <div class="stats">
+    <div class="st"><b>4</b><span>个方面成果</span></div>
+    <div class="dv"></div>
+    <div class="st"><b>2</b><span>项进度：已完成</span></div>
+    <div class="dv"></div>
+    <div class="st"><b>1</b><span>项进度：收尾中</span></div>
+    <div class="dv"></div>
+    <div class="st"><b>1</b><span>项进度：持续推进</span></div>
+  </div>
+  <div class="card c1" style="left:48px;">
+    <div class="card-h">
+      <div class="icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="#ffffff"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg></div>
+      <h3>重点项目交付</h3>
+    </div>
+    <div class="card-b">
+      <div class="bar">成果概述</div>
+      <ul>
+        <li class="mi"><span class="dot"></span><span class="md">核心项目按计划完成关键节点交付，全年无重大延期</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">交付质量获得业务方与上级认可，验收一次通过率保持高位</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">过程中沉淀可复用的标准化流程，形成项目执行参考模板</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">关键里程碑均留有过程文档，支持后续同类项目快速启动</span></li>
+      </ul>
+    </div>
+    <div class="card-f">
+      <div class="flag" style="clip-path:polygon(0 0,100% 0,100% 62%,40% 62%,0 100%);"></div>
+      <div class="prog"><span class="lb">进度</span><span class="num">已完成</span></div>
+    </div>
+  </div>
+  <div class="card c2" style="left:348px;">
+    <div class="card-h">
+      <div class="icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="#ffffff"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></div>
+      <h3>团队能力建设</h3>
+    </div>
+    <div class="card-b">
+      <div class="bar">成果概述</div>
+      <ul>
+        <li class="mi"><span class="dot"></span><span class="md">成员专业能力结构持续优化，补齐前期短板岗位</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">关键岗位完成梯队培养与储备，核心职能不再依赖单点</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">团队协作氛围与稳定性稳步提升，人员流动率低于往年</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">建立定期技能分享机制，促进经验在团队内部流转</span></li>
+      </ul>
+    </div>
+    <div class="card-f">
+      <div class="flag" style="clip-path:polygon(0 0,100% 0,100% 62%,40% 62%,0 100%);background:var(--tertiary);opacity:.16;"></div>
+      <div class="prog"><span class="lb">进度</span><span class="num">收尾中</span></div>
+    </div>
+  </div>
+  <div class="card c3" style="left:648px;">
+    <div class="card-h">
+      <div class="icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="#ffffff"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2zM7.5 12l3.5 4.5 2.5-3 3.5 4.5h-12l2.5-6z"/></svg></div>
+      <h3>流程效率优化</h3>
+    </div>
+    <div class="card-b">
+      <div class="bar">成果概述</div>
+      <ul>
+        <li class="mi"><span class="dot"></span><span class="md">梳理并优化核心业务关键环节，消除重复审批节点</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">跨环节响应时长明显缩短，协同衔接更顺畅</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">重复性事务占比有效下降，释放人力投入高价值工作</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">优化后的流程已固化为操作规范，纳入日常执行标准</span></li>
+      </ul>
+    </div>
+    <div class="card-f">
+      <div class="flag" style="clip-path:polygon(0 0,100% 0,100% 62%,40% 62%,0 100%);background:var(--secondary);opacity:.16;"></div>
+      <div class="prog"><span class="lb">进度</span><span class="num">持续推进</span></div>
+    </div>
+  </div>
+  <div class="card c4" style="left:948px;">
+    <div class="card-h">
+      <div class="icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="#ffffff"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg></div>
+      <h3>成本与资源管控</h3>
+    </div>
+    <div class="card-b">
+      <div class="bar">成果概述</div>
+      <ul>
+        <li class="mi"><span class="dot"></span><span class="md">预算执行率保持在合理区间，全年无超支事项</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">资源利用率与投入产出比稳步改善，闲置资源得到盘活</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">建立定期成本复盘机制，每季度输出费用分析报告</span></li>
+        <li class="mi"><span class="dot"></span><span class="md">管控措施形成闭环，问题项均落实整改并跟踪验证</span></li>
+      </ul>
+    </div>
+    <div class="card-f">
+      <div class="flag" style="clip-path:polygon(0 0,100% 0,100% 62%,40% 62%,0 100%);"></div>
+      <div class="prog"><span class="lb">进度</span><span class="num">已完成</span></div>
+    </div>
+  </div>
+  <div class="timeline">
+    <div class="tl-line"></div>
+    <div class="tl-arrow"></div>
+    <div class="tn" style="left:176px;border-color:var(--primary);"><i style="background:var(--primary);"></i></div>
+    <div class="tn" style="left:476px;border-color:var(--tertiary);"><i style="background:var(--tertiary);"></i></div>
+    <div class="tn" style="left:776px;border-color:var(--secondary);"><i style="background:var(--secondary);"></i></div>
+    <div class="tn" style="left:1076px;border-color:var(--primary);"><i style="background:var(--primary);"></i></div>
+    <div class="tl" style="left:90px;"><b>成果一</b>重点项目交付 · 已完成</div>
+    <div class="tl" style="left:390px;"><b>成果二</b>团队能力建设 · 收尾中</div>
+    <div class="tl" style="left:690px;"><b>成果三</b>流程效率优化 · 持续推进</div>
+    <div class="tl" style="left:990px;"><b>成果四</b>成本与资源管控 · 已完成</div>
+  </div>
+</div>
+</body>
+</html>

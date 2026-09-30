@@ -44,17 +44,42 @@ HUMAN_RESULTS_FILE = None
 
 def detect_variant_format(case_dir: Path, variant: str) -> str:
     """
-    检测 variant 的格式：返回 "html" / "pptx" / "missing"。
+    检测 variant 的格式：返回 "html" / "multi-html" / "pptx" / "missing"。
 
-    优先级：html 优先（更快、保真度可控），其次 pptx。
+    优先级：
+      1. a.html（单文件 HTML，权威）
+      2. a/ 目录（多页 HTML 拼成的 PPT，每页一个独立 HTML 文件）
+      3. a.pptx（PPTX，需 LibreOffice 渲染）
     """
-    html_path = case_dir / f"{variant}.html"
-    if html_path.exists():
+    if (case_dir / f"{variant}.html").exists():
         return "html"
-    pptx_path = case_dir / f"{variant}.pptx"
-    if pptx_path.exists():
+    if (case_dir / variant).is_dir() and any((case_dir / variant).glob("*.html")):
+        return "multi-html"
+    if (case_dir / f"{variant}.pptx").exists():
         return "pptx"
     return "missing"
+
+
+def list_multi_html_pages(case_dir: Path, variant: str) -> list:
+    """
+    列出 a/ 或 b/ 目录下的所有 HTML 页面，按文件名排序。
+
+    返回：[Path, Path, ...]（按页码顺序）
+    """
+    sub = case_dir / variant
+    if not sub.is_dir():
+        return []
+    return sorted(sub.glob("*.html"))
+
+
+def get_multi_html_pages(case_id: str, variant: str) -> list:
+    """多 HTML 模式：返回 a/ 或 b/ 目录下所有 HTML 文件路径。"""
+    if variant not in ("a", "b"):
+        abort(400, "variant must be 'a' or 'b'")
+    case_dir = CASES_DIR / case_id
+    if not case_dir.exists():
+        abort(404, f"case {case_id} not found")
+    return list_multi_html_pages(case_dir, variant)
 
 
 def load_cases():
@@ -212,6 +237,13 @@ def api_case_render(case_id, variant):
     fmt = detect_variant_format(case_dir, variant)
     if fmt == "html":
         return Response(read_html(case_id, variant), mimetype="text/html")
+    elif fmt == "multi-html":
+        html_paths = get_multi_html_pages(case_id, variant)
+        pages = [
+            {"page": i + 1, "url": f"/api/case/{case_id}/page/{variant}/{i + 1}"}
+            for i in range(len(html_paths))
+        ]
+        return jsonify({"type": "multi-html", "pages": pages, "page_count": len(html_paths)})
     elif fmt == "pptx":
         try:
             png_paths = get_pptx_pages(case_id, variant)
@@ -230,19 +262,34 @@ def api_case_render(case_id, variant):
 @app.route("/api/case/<case_id>/page/<variant>/<int:page_num>", methods=["GET"])
 def api_case_page(case_id, variant, page_num):
     """
-    返回 PPTX 某页的 PNG 图片。
+    统一分页端点。
 
-    用于缩略图网格和点击放大。
+    - PPTX 模式：返回该页的 PNG 图片（image/png）。
+    - multi-html 模式：返回该页的 HTML 源码（text/html）。
+
+    compare.html 同时支持 iframe（HTML）和 img（PNG）两种缩略图渲染。
     """
     if variant not in ("a", "b"):
         abort(400, "variant must be 'a' or 'b'")
-    try:
-        png_paths = get_pptx_pages(case_id, variant)
-    except RuntimeError as e:
-        return jsonify({"error": "pptx_render_failed", "message": str(e)}), 500
-    if page_num < 1 or page_num > len(png_paths):
-        abort(404, f"page {page_num} out of range (1-{len(png_paths)})")
-    return send_file(png_paths[page_num - 1], mimetype="image/png")
+    case_dir = CASES_DIR / case_id
+    if not case_dir.exists():
+        abort(404, f"case {case_id} not found")
+    fmt = detect_variant_format(case_dir, variant)
+    if fmt == "pptx":
+        try:
+            png_paths = get_pptx_pages(case_id, variant)
+        except RuntimeError as e:
+            return jsonify({"error": "pptx_render_failed", "message": str(e)}), 500
+        if page_num < 1 or page_num > len(png_paths):
+            abort(404, f"page {page_num} out of range (1-{len(png_paths)})")
+        return send_file(png_paths[page_num - 1], mimetype="image/png")
+    elif fmt == "multi-html":
+        html_paths = get_multi_html_pages(case_id, variant)
+        if page_num < 1 or page_num > len(html_paths):
+            abort(404, f"page {page_num} out of range (1-{len(html_paths)})")
+        return Response(html_paths[page_num - 1].read_text(encoding="utf-8"), mimetype="text/html")
+    else:
+        abort(404, f"{variant} not a paginated format in {case_id}")
 
 
 @app.route("/api/select", methods=["POST"])

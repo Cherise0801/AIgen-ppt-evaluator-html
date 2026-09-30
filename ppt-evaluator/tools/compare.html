@@ -70,6 +70,7 @@
   }
   .thumb:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(64,158,255,0.15); }
   .thumb img { width: 100%; display: block; }
+  .thumb iframe { width: 200%; height: 200%; border: none; transform: scale(0.5); transform-origin: 0 0; pointer-events: none; background: white; }
   .thumb-label {
     position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.6); color: white;
     padding: 2px 6px; border-radius: 3px; font-size: 11px;
@@ -228,6 +229,7 @@
 <!-- 灯箱 -->
 <div class="lightbox" id="lightbox">
   <button class="lightbox-close" id="lightbox-close">×</button>
+  <iframe id="lightbox-frame" style="display:none; width: 92vw; height: 85vh; border: none; background: white; box-shadow: 0 8px 32px rgba(0,0,0,0.5);"></iframe>
   <img id="lightbox-img" alt="放大查看" />
   <div class="lightbox-controls">
     <button id="lb-prev">← 上一页</button>
@@ -385,18 +387,23 @@ function renderVariant(variant) {
     iframe.srcdoc = data.payload;
     pane.style.padding = '0';
     pane.appendChild(iframe);
-  } else if (data.type === 'pptx') {
-    formatLabel.textContent = `PPTX · ${data.payload.page_count} 页`;
+  } else if (data.type === 'pptx' || data.type === 'multi-html') {
+    const labelText = data.type === 'pptx' ? `PPTX · ${data.payload.page_count} 页` : `HTML · ${data.payload.page_count} 页`;
+    formatLabel.textContent = labelText;
     pane.style.padding = '8px';
     // 缩略图网格
     const grid = document.createElement('div');
     grid.className = 'thumb-grid';
+    const useIframe = (data.type === 'multi-html');
     data.payload.pages.forEach((page, idx) => {
       const thumb = document.createElement('div');
       thumb.className = 'thumb';
+      const media = useIframe
+        ? `<iframe src="${page.url}" title="第 ${page.page} 页" loading="lazy" sandbox="allow-same-origin"></iframe>`
+        : `<img src="${page.url}" alt="第 ${page.page} 页" loading="lazy" />`;
       thumb.innerHTML = `
         <span class="thumb-label">第 ${page.page} 页</span>
-        <img src="${page.url}" alt="第 ${page.page} 页" loading="lazy" />
+        ${media}
       `;
       thumb.onclick = () => openLightbox(variant, idx);
       grid.appendChild(thumb);
@@ -437,9 +444,10 @@ async function showCase() {
 // ============== 灯箱 ==============
 function openLightbox(variant, pageIdx) {
   const data = state.currentVariants[variant];
-  if (!data || data.type !== 'pptx') return;
+  if (!data || (data.type !== 'pptx' && data.type !== 'multi-html')) return;
   state.lightbox.open = true;
   state.lightbox.variant = variant;
+  state.lightbox.variantType = data.type;
   state.lightbox.pages = data.payload.pages;
   state.lightbox.currentIndex = pageIdx;
   updateLightbox();
@@ -466,7 +474,18 @@ function lightboxNext() {
 function updateLightbox() {
   const pages = state.lightbox.pages;
   const cur = state.lightbox.currentIndex;
-  document.getElementById('lightbox-img').src = pages[cur].url;
+  const url = pages[cur].url;
+  const img = document.getElementById('lightbox-img');
+  const frm = document.getElementById('lightbox-frame');
+  if (state.lightbox.variantType === 'multi-html') {
+    img.style.display = 'none';
+    frm.style.display = 'block';
+    frm.src = url;
+  } else {
+    frm.style.display = 'none';
+    img.style.display = 'block';
+    img.src = url;
+  }
   document.getElementById('lb-info').textContent = `第 ${pages[cur].page} 页 / 共 ${pages.length} 页`;
 }
 
