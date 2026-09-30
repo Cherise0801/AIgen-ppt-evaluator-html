@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>PPT 测评校准报告</title>
+<script src="../tools/static/echarts.min.js"></script>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 1100px; margin: 30px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.6; }
+  h1 { border-bottom: 2px solid #2563eb; padding-bottom: 8px; }
+  h2 { margin-top: 32px; color: #1e40af; border-left: 4px solid #2563eb; padding-left: 10px; }
+  h3 { color: #374151; }
+  table { border-collapse: collapse; margin: 12px 0; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 12px; }
+  th { background: #f3f4f6; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-size: 13px; }
+  .chart { width: 100%; height: 380px; margin: 20px 0; }
+  .summary-card { display: inline-block; background: #eff6ff; border: 1px solid #93c5fd; padding: 16px 24px; border-radius: 8px; margin: 8px 12px 8px 0; }
+  .summary-card .label { font-size: 12px; color: #6b7280; }
+  .summary-card .value { font-size: 28px; font-weight: 700; color: #1e40af; }
+</style></head>
+<body>
+<h1>🎯 PPT 测评校准报告</h1>
+<div>
+  <div class="summary-card"><div class="label">总一致率</div><div class="value">100.0%</div></div>
+  <div class="summary-card"><div class="label">case 对数</div><div class="value">1</div></div>
+  <div class="summary-card"><div class="label">AI 选对数</div><div class="value">1</div></div>
+</div>
+
+<div class="chart" id="dimChart"></div>
+<div class="chart" id="caseChart"></div>
+
+<h2>详细报告</h2>
+<div style="background:#f9fafb; padding:16px; border-radius:6px;"><h1>PPT 测评校准报告</h1>
+
+<strong>生成时间</strong>：2026-09-30 15:54:40
+<strong>人工盲测总数</strong>：0 次（覆盖 1 个 case 对）
+<strong>AI 测评总数</strong>：0 次
+
+<h2>1. 总一致率</h2>
+
+<ul><li>对齐 case 对：<strong>1</strong></li>
+<li>AI 选对了：<strong>1</strong></li>
+<li><strong>一致率：100.0%</strong></li>
+</ul>
+<h2>2. 分维度一致率</h2>
+
+<table border=1 cellspacing=0 cellpadding=6><tr><td>维度</td><td>AI 倾向与人一致次数</td><td>有效总次数</td><td>一致率</td></tr>
+</table>|------|---------------------|------------|--------|
+<table border=1 cellspacing=0 cellpadding=6><tr><td>内容质量</td><td>1</td><td>1</td><td>100.0%</td></tr>
+<tr><td>结构逻辑</td><td>1</td><td>1</td><td>100.0%</td></tr>
+<tr><td>视觉设计</td><td>0</td><td>1</td><td>0.0%</td></tr>
+<tr><td>表达传达</td><td>1</td><td>1</td><td>100.0%</td></tr>
+<tr><td>技术规范</td><td>1</td><td>1</td><td>100.0%</td></tr>
+<tr><td>版面合规</td><td>1</td><td>1</td><td>100.0%</td></tr>
+<tr><td>版式多样性</td><td>1</td><td>1</td><td>100.0%</td></tr>
+</table>
+<h2>3. 各 case 表现（人工盲测维度）</h2>
+
+<table border=1 cellspacing=0 cellpadding=6><tr><td>Case</td><td>胜场</td><td>参与对数</td><td>胜率</td></tr>
+</table>|------|------|----------|------|
+<table border=1 cellspacing=0 cellpadding=6><tr><td>case-003</td><td>1</td><td>1</td><td>100.0%</td></tr>
+<tr><td>case-004</td><td>0</td><td>1</td><td>0.0%</td></tr>
+</table>
+<h2>4. 分歧 case 对</h2>
+
+无分歧。
+<h2>5. 结论与建议</h2>
+
+✅ AI 测评与人工判断高度一致，模型评分可靠。
+<ul><li>分维度看，<strong>视觉设计</strong> 一致率最低（0.0%），AI 在此维度与人工判断分歧最大，建议重点优化。</li></ul></div>
+
+<script>
+const dimData = {"categories": ["内容质量", "结构逻辑", "视觉设计", "表达传达", "技术规范", "版面合规", "版式多样性"], "rates": [100.0, 100.0, 0.0, 100.0, 100.0, 100.0, 100.0]};
+const caseData = {"categories": ["case-003", "case-004"], "wins": [1, 0], "totals": [1, 1]};
+
+const dimChart = echarts.init(document.getElementById('dimChart'));
+dimChart.setOption({
+  title: {text: '各维度一致率', left: 'center'},
+  tooltip: {trigger: 'axis', formatter: '{b}: {c}%'},
+  grid: {left: 80, right: 40, top: 60, bottom: 40},
+  xAxis: {type: 'value', max: 100, axisLabel: {formatter: '{value}%'}},
+  yAxis: {type: 'category', data: dimData.categories},
+  series: [{
+    type: 'bar',
+    data: dimData.rates,
+    itemStyle: {
+      color: function(p) {
+        if (p.value >= 80) return '#10b981';
+        if (p.value >= 60) return '#f59e0b';
+        return '#ef4444';
+      }
+    },
+    label: {show: true, position: 'right', formatter: '{c}%'}
+  }]
+});
+
+const caseChart = echarts.init(document.getElementById('caseChart'));
+caseChart.setOption({
+  title: {text: '各 case 胜场数（人工盲测）', left: 'center'},
+  tooltip: {trigger: 'axis'},
+  legend: {data: ['胜场', '参与对数'], top: 30},
+  grid: {left: 60, right: 40, top: 80, bottom: 40},
+  xAxis: {type: 'category', data: caseData.categories},
+  yAxis: {type: 'value'},
+  series: [
+    {name: '胜场', type: 'bar', data: caseData.wins, itemStyle: {color: '#3b82f6'}},
+    {name: '参与对数', type: 'bar', data: caseData.totals, itemStyle: {color: '#94a3b8'}}
+  ]
+});
+</script>
+</body></html>

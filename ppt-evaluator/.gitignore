@@ -6,12 +6,12 @@ __pycache__/
 .venv/
 venv/
 
-# 运行时结果（人工盲测输出 + AI 测评输入）
-results/human_results.json
-results/ai_results.json
-results/report.md
-results/report.html
-results/summary.json
+# 运行时结果（默认不入库；用户可手动 add 提交示例数据）
+# results/human_results.json
+# results/ai_results.json
+# results/report.md
+# results/report.html
+# results/summary.json
 
 # PPTX 渲染缓存
 .cache/

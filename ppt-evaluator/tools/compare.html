@@ -2,587 +2,459 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PPT 测评校准 - 人工盲测</title>
-<script src="/static/echarts.min.js"></script>
+<script src="static/echarts.min.js"></script>
 <style>
-  :root {
-    --bg: #f5f7fa;
-    --panel: #ffffff;
-    --border: #e4e7ed;
-    --text: #303133;
-    --text-sub: #606266;
-    --primary: #409eff;
-    --success: #67c23a;
-    --warning: #e6a23c;
-    --danger: #f56c6c;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-    background: var(--bg); color: var(--text); font-size: 14px;
-  }
-  .topbar {
-    background: var(--panel); border-bottom: 1px solid var(--border);
-    padding: 12px 24px; display: flex; justify-content: space-between; align-items: center;
-    position: sticky; top: 0; z-index: 10;
-  }
-  .topbar h1 { font-size: 16px; margin: 0; }
-  .progress-info { display: flex; gap: 16px; align-items: center; color: var(--text-sub); }
-  .progress-bar { width: 200px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-  .progress-bar > div { height: 100%; background: var(--primary); transition: width 0.3s; }
-  .main { padding: 16px 24px; }
-  .warning-banner {
-    background: #fdf6ec; border: 1px solid #faecd8; color: #b88230;
-    padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: none;
-  }
-  .warning-banner.show { display: block; }
-  .warning-banner.error { background: #fef0f0; border-color: #fde2e2; color: #c45656; }
-  .input-box {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    padding: 12px 16px; margin-bottom: 12px;
-  }
-  .input-box label { color: var(--text-sub); font-size: 12px; }
-  .input-box .content { margin-top: 4px; white-space: pre-wrap; }
-  .compare-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 70vh;
-  }
-  .pane {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    display: flex; flex-direction: column; overflow: hidden;
-  }
-  .pane-header {
-    padding: 8px 12px; background: #fafbfc; border-bottom: 1px solid var(--border);
-    font-weight: 600; display: flex; justify-content: space-between; align-items: center;
-  }
-  .pane-header .variant { color: var(--primary); }
-  .pane-header .format { color: var(--text-sub); font-size: 12px; font-weight: normal; }
-  .pane iframe { width: 100%; flex: 1; border: none; background: white; }
-  /* PPTX 缩略图网格 */
-  .pane-body { flex: 1; overflow: auto; padding: 8px; background: #fafbfc; }
-  .thumb-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 8px;
-  }
-  .thumb {
-    background: white; border: 1px solid var(--border); border-radius: 4px;
-    cursor: pointer; overflow: hidden; transition: all 0.15s; position: relative;
-  }
-  .thumb:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(64,158,255,0.15); }
-  .thumb img { width: 100%; display: block; }
-  .thumb iframe { width: 200%; height: 200%; border: none; transform: scale(0.5); transform-origin: 0 0; pointer-events: none; background: white; }
-  .thumb-label {
-    position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.6); color: white;
-    padding: 2px 6px; border-radius: 3px; font-size: 11px;
-  }
-  .pane-error { padding: 24px; text-align: center; color: var(--danger); }
-  .actions {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    padding: 16px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  }
-  .confidence { display: flex; gap: 6px; align-items: center; }
-  .confidence button {
-    width: 36px; height: 36px; border: 1px solid var(--border); background: white;
-    border-radius: 4px; cursor: pointer; font-weight: 600;
-  }
-  .confidence button:hover { background: #ecf5ff; }
-  .confidence button.selected { background: var(--primary); color: white; border-color: var(--primary); }
-  .btn-row { display: flex; gap: 8px; }
-  .btn {
-    padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;
-    font-size: 14px; font-weight: 500; transition: all 0.2s;
-  }
-  .btn-primary { background: var(--primary); color: white; }
-  .btn-primary:hover { background: #66b1ff; }
-  .btn-primary:disabled { background: #c0c4cc; cursor: not-allowed; }
-  .btn-warning { background: var(--warning); color: white; }
-  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-sub); }
-  .stats {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    padding: 16px; margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
-  }
-  .stat-card { text-align: center; }
-  .stat-card .num { font-size: 28px; font-weight: 700; color: var(--primary); }
-  .stat-card .label { color: var(--text-sub); font-size: 12px; margin-top: 4px; }
-  .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 12px; }
-  .chart { width: 100%; height: 220px; }
-  .toast {
-    position: fixed; top: 80px; right: 24px; background: var(--success); color: white;
-    padding: 10px 16px; border-radius: 4px; opacity: 0; transition: opacity 0.3s; z-index: 100;
-  }
-  .toast.show { opacity: 1; }
-  .empty {
-    text-align: center; padding: 60px 20px; color: var(--text-sub);
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-  }
-  .empty h2 { color: var(--text); }
-  .kbd {
-    display: inline-block; padding: 2px 6px; background: #f4f4f5; border: 1px solid #e4e7ed;
-    border-radius: 3px; font-family: monospace; font-size: 12px;
-  }
-  .hint { color: var(--text-sub); font-size: 12px; }
-  /* 灯箱 */
-  .lightbox {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000;
-    display: none; align-items: center; justify-content: center; flex-direction: column;
-  }
-  .lightbox.show { display: flex; }
-  .lightbox img { max-width: 92vw; max-height: 85vh; box-shadow: 0 8px 32px rgba(0,0,0,0.5); background: white; }
-  .lightbox-controls {
-    color: white; padding: 12px; display: flex; gap: 16px; align-items: center;
-    font-size: 14px;
-  }
-  .lightbox-controls button {
-    background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3);
-    padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 14px;
-  }
-  .lightbox-controls button:hover { background: rgba(255,255,255,0.25); }
-  .lightbox-close {
-    position: absolute; top: 16px; right: 16px; color: white; font-size: 28px;
-    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
-    width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  }
-  .lightbox-close:hover { background: rgba(255,255,255,0.2); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: #f6f7f9; color: #1a1a1a; min-height: 100vh; }
+  header { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 14px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .spacer { flex: 1; }
+  header .progress { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #6b7280; }
+  header .progress-bar { width: 200px; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+  header .progress-bar > div { height: 100%; background: #2563eb; transition: width 0.3s; }
+  .warn-banner { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 24px; font-size: 13px; line-height: 1.6; }
+
+  /* Page: library */
+  .library { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .library h2 { font-size: 16px; margin-bottom: 16px; color: #374151; }
+  .case-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .case-card { background: #fff; border: 2px solid #e5e7eb; border-radius: 10px; padding: 18px; cursor: pointer; transition: all 0.15s; position: relative; }
+  .case-card:hover { border-color: #93c5fd; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+  .case-card.selected-a { border-color: #3b82f6; background: #eff6ff; }
+  .case-card.selected-b { border-color: #10b981; background: #ecfdf5; }
+  .case-card.disabled { opacity: 0.4; pointer-events: none; }
+  .case-card .code { display: inline-block; background: #1f2937; color: #fff; font-family: "SF Mono", monospace; font-size: 16px; font-weight: 700; padding: 4px 10px; border-radius: 6px; letter-spacing: 1px; }
+  .case-card .meta { margin-top: 10px; font-size: 12px; color: #6b7280; display: flex; gap: 12px; flex-wrap: wrap; }
+  .case-card .meta .badge { background: #f3f4f6; padding: 2px 8px; border-radius: 4px; }
+  .case-card .input { margin-top: 10px; font-size: 13px; color: #4b5563; line-height: 1.5; min-height: 40px; }
+  .case-card .stats { margin-top: 12px; font-size: 11px; color: #9ca3af; border-top: 1px solid #f3f4f6; padding-top: 8px; }
+  .case-card .role { position: absolute; top: 14px; right: 14px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .case-card.selected-a .role { background: #3b82f6; color: #fff; }
+  .case-card.selected-b .role { background: #10b981; color: #fff; }
+
+  /* Page: compare */
+  .compare { display: none; }
+  .compare.active { display: block; }
+  .compare-bar { background: #fff; padding: 14px 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 9; }
+  .compare-bar .seed-note { font-size: 12px; color: #9ca3af; }
+  .compare-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 24px; }
+  .panel { background: #fff; border-radius: 10px; padding: 14px; }
+  .panel h3 { font-size: 14px; margin-bottom: 10px; color: #374151; display: flex; align-items: center; gap: 10px; }
+  .panel h3 .code-tag { font-family: "SF Mono", monospace; background: #1f2937; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 13px; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 70vh; overflow-y: auto; padding: 4px; }
+  .thumb { background: #f3f4f6; border-radius: 6px; overflow: hidden; cursor: pointer; border: 1px solid #e5e7eb; aspect-ratio: 16/9; position: relative; transition: transform 0.1s; }
+  .thumb:hover { transform: scale(1.03); border-color: #3b82f6; }
+  .thumb iframe { width: 1280px; height: 720px; border: 0; position: absolute; top: 0; left: 0; transform-origin: top left; transform: scale(calc(150 / 1280)); }
+  .thumb .page-num { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 3px; z-index: 2; }
+
+  .action-bar { background: #fff; border-top: 1px solid #e5e7eb; padding: 16px 24px; position: sticky; bottom: 0; display: flex; align-items: center; gap: 16px; }
+  .action-bar button { padding: 10px 24px; font-size: 15px; font-weight: 600; border-radius: 6px; border: 0; cursor: pointer; transition: all 0.1s; }
+  .btn-a { background: #3b82f6; color: #fff; }
+  .btn-a:hover { background: #2563eb; }
+  .btn-b { background: #10b981; color: #fff; }
+  .btn-b:hover { background: #059669; }
+  .btn-tie { background: #6b7280; color: #fff; }
+  .btn-tie:hover { background: #4b5563; }
+  .confidence { display: flex; align-items: center; gap: 8px; }
+  .confidence label { font-size: 13px; color: #6b7280; }
+  .confidence input { width: 50px; padding: 4px; text-align: center; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; }
+  .action-bar .spacer { flex: 1; }
+  .btn-secondary { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+  .btn-secondary:hover { background: #f9fafb; }
+
+  /* Lightbox */
+  .lightbox { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.92); z-index: 100; flex-direction: column; align-items: center; justify-content: center; }
+  .lightbox.active { display: flex; }
+  .lightbox-header { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; color: #fff; font-size: 13px; }
+  .lightbox-frame { width: 90vw; height: 80vh; background: #fff; border-radius: 8px; overflow: hidden; position: relative; }
+  .lightbox-frame iframe { width: 100%; height: 100%; border: 0; }
+  .lightbox-nav { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; gap: 12px; }
+  .lightbox-nav button { background: rgba(255,255,255,0.2); color: #fff; border: 0; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .lightbox-nav button:hover { background: rgba(255,255,255,0.3); }
+  .lightbox-nav .close { background: #ef4444; }
+
+  /* Upload modal */
+  .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
+  .modal.active { display: flex; }
+  .modal-content { background: #fff; border-radius: 10px; padding: 24px; max-width: 500px; width: 90%; }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; }
+  .modal label { display: block; font-size: 13px; color: #6b7280; margin: 12px 0 4px; }
+  .modal input[type=text], .modal input[type=file] { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; }
+  .modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .modal button { padding: 8px 16px; border-radius: 4px; border: 0; cursor: pointer; font-size: 13px; }
+  .modal .btn-primary { background: #3b82f6; color: #fff; }
+  .modal .btn-cancel { background: #f3f4f6; color: #374151; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 80px 20px; color: #9ca3af; }
+  .empty h2 { font-size: 20px; color: #6b7280; margin-bottom: 12px; }
+  .empty p { font-size: 14px; line-height: 1.8; }
+
+  /* Done */
+  .done-state { display: none; text-align: center; padding: 80px 20px; }
+  .done-state.active { display: block; }
+  .done-state h2 { font-size: 24px; color: #1a1a1a; margin-bottom: 16px; }
+  .done-state p { color: #6b7280; line-height: 1.8; margin: 8px 0; }
 </style>
 </head>
 <body>
 
-<div class="topbar">
+<header>
   <h1>🎯 PPT 测评校准 - 人工盲测</h1>
-  <div class="progress-info">
-    <span>进度</span>
-    <div class="progress-bar"><div id="progress-fill" style="width: 0%"></div></div>
-    <span id="progress-text">0 / 0</span>
+  <div class="spacer"></div>
+  <div class="progress" id="headerProgress">
+    <span>进度 <strong id="progressText">0 / 0</strong></span>
+    <div class="progress-bar"><div id="progressBar" style="width:0%"></div></div>
+  </div>
+  <button class="btn-secondary" id="btnUpload" style="padding:6px 14px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;font-size:13px;">📤 上传新 case</button>
+  <button class="btn-secondary" id="btnReset" style="padding:6px 14px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;font-size:13px;">🗑 重置进度</button>
+</header>
+
+<div id="warnBanner"></div>
+
+<!-- Library 主页 -->
+<div class="library" id="library">
+  <h2>📚 Case 库 <span id="libraryCount" style="color:#6b7280;font-size:13px;font-weight:normal;margin-left:8px;"></span></h2>
+  <p style="color:#6b7280;font-size:13px;margin-bottom:16px;">点选 2 个 case 开始盲测。已盲测过的 case 会显示次数。</p>
+  <div class="case-grid" id="caseGrid"></div>
+</div>
+
+<!-- 对比页 -->
+<div class="compare" id="compare">
+  <div class="compare-bar">
+    <button class="btn-secondary" id="btnBack" style="padding:6px 14px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;">← 返回选 case</button>
+    <span class="seed-note">本次盲测 seed: <code id="seedText"></code>（每次刷新变化）</span>
+  </div>
+  <div class="compare-panels">
+    <div class="panel" id="panelA">
+      <h3>左侧 <span class="code-tag" id="codeA"></span> <span style="color:#6b7280;font-weight:normal;font-size:12px;" id="pagesA"></span></h3>
+      <div class="thumbs" id="thumbsA"></div>
+    </div>
+    <div class="panel" id="panelB">
+      <h3>右侧 <span class="code-tag" id="codeB"></span> <span style="color:#6b7280;font-weight:normal;font-size:12px;" id="pagesB"></span></h3>
+      <div class="thumbs" id="thumbsB"></div>
+    </div>
+  </div>
+  <div class="action-bar">
+    <button class="btn-a" id="btnChooseA">选 左侧</button>
+    <button class="btn-tie" id="btnTie">难分伯仲</button>
+    <button class="btn-b" id="btnChooseB">选 右侧</button>
+    <div class="confidence">
+      <label>信心度：</label>
+      <input type="number" id="confidence" min="1" max="5" value="3" />
+      <span style="font-size:12px;color:#9ca3af;">(1=随便 5=很有把握)</span>
+    </div>
+    <div class="spacer"></div>
+    <span style="font-size:12px;color:#6b7280;" id="actionHint">选完后自动回主页</span>
   </div>
 </div>
 
-<div class="main" id="app">
-  <div id="warning-banner" class="warning-banner"></div>
-
-  <div id="empty-state" class="empty" style="display: none;">
-    <h2>没有可用的 case</h2>
-    <p>请在 <code>cases/</code> 目录下创建子目录，每个子目录包含 <code>input.txt</code> + <code>a.{html|pptx}</code> + <code>b.{html|pptx}</code></p>
-  </div>
-
-  <div id="case-area" style="display: none;">
-    <div class="input-box">
-      <label>📝 输入（同一 prompt）</label>
-      <div class="content" id="input-content"></div>
-    </div>
-
-    <div class="compare-grid">
-      <div class="pane">
-        <div class="pane-header">
-          <span class="variant">方案 A</span>
-          <span class="format" id="format-a"></span>
-        </div>
-        <div class="pane-body" id="pane-a"></div>
-      </div>
-      <div class="pane">
-        <div class="pane-header">
-          <span class="variant">方案 B</span>
-          <span class="format" id="format-b"></span>
-        </div>
-        <div class="pane-body" id="pane-b"></div>
-      </div>
-    </div>
-
-    <div class="actions">
-      <div class="confidence">
-        <span class="hint">信心度：</span>
-        <button data-c="1">1</button>
-        <button data-c="2">2</button>
-        <button data-c="3">3</button>
-        <button data-c="4">4</button>
-        <button data-c="5">5</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-warning" id="btn-skip">⏭ 跳过</button>
-        <button class="btn btn-primary" id="btn-choose-a" disabled>选 A (←)</button>
-        <button class="btn btn-primary" id="btn-choose-b" disabled>选 B (→)</button>
-      </div>
-    </div>
-
-    <div class="stats">
-      <div class="stat-card">
-        <div class="num" id="stat-completed">0</div>
-        <div class="label">已完成</div>
-      </div>
-      <div class="stat-card">
-        <div class="num" id="stat-pending">0</div>
-        <div class="label">待评估</div>
-      </div>
-      <div class="stat-card">
-        <div class="num" id="stat-a-ratio">-</div>
-        <div class="label">A 胜出率</div>
-      </div>
-    </div>
-
-    <div class="chart-box">
-      <div id="chart-progress" class="chart"></div>
-    </div>
-  </div>
+<!-- 完成态 -->
+<div class="done-state" id="doneState">
+  <h2>🎉 本次盲测完成！</h2>
+  <p>共完成 <strong id="doneCount">0</strong> 次人工盲测</p>
+  <p>下一步：用本 Skill 跑 AI 测评，然后执行 <code>python tools/analyze.py</code> 生成对比报告</p>
+  <button class="btn-secondary" id="btnBack2" style="margin-top:20px;padding:8px 20px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;">继续盲测（再次随机配对）</button>
 </div>
-
-<div class="toast" id="toast">已记录</div>
 
 <!-- 灯箱 -->
 <div class="lightbox" id="lightbox">
-  <button class="lightbox-close" id="lightbox-close">×</button>
-  <iframe id="lightbox-frame" style="display:none; width: 92vw; height: 85vh; border: none; background: white; box-shadow: 0 8px 32px rgba(0,0,0,0.5);"></iframe>
-  <img id="lightbox-img" alt="放大查看" />
-  <div class="lightbox-controls">
-    <button id="lb-prev">← 上一页</button>
-    <span id="lb-info">1 / 1</span>
-    <button id="lb-next">下一页 →</button>
-    <span class="hint" style="color: rgba(255,255,255,0.5); margin-left: 16px;">ESC 关闭</span>
+  <div class="lightbox-header">
+    <span id="lightboxTitle">查看页面</span>
+    <span style="opacity:0.7;">ESC 关闭 · ← → 翻页</span>
+  </div>
+  <div class="lightbox-frame"><iframe id="lightboxIframe"></iframe></div>
+  <div class="lightbox-nav">
+    <button id="lbPrev">← 上一页</button>
+    <span id="lbPage" style="color:#fff;align-self:center;font-size:13px;"></span>
+    <button id="lbNext">下一页 →</button>
+    <button class="close" id="lbClose">关闭</button>
+  </div>
+</div>
+
+<!-- 上传 modal -->
+<div class="modal" id="uploadModal">
+  <div class="modal-content">
+    <h3>📤 上传新 case</h3>
+    <label>Case ID（留空自动生成 case-XXX）：</label>
+    <input type="text" id="uploadCaseId" placeholder="例如 my-product-deck" />
+    <label>输入描述（盲测时给用户看）：</label>
+    <input type="text" id="uploadInput" placeholder="例如：年度述职报告（含五大模块）" />
+    <label>HTML 文件（可多选，文件名带页码顺序）：</label>
+    <input type="file" id="uploadFiles" accept=".html,.htm" multiple />
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btnUploadCancel">取消</button>
+      <button class="btn-primary" id="btnUploadConfirm">上传</button>
+    </div>
   </div>
 </div>
 
 <script>
-// ============== 状态 ==============
+// ===== 全局状态 =====
 const state = {
-  cases: [],
-  pending: [],
-  currentCase: null,
-  currentVariants: { a: null, b: null },  // {type: 'html'|'pptx', payload: ...}
-  selectedConfidence: null,
-  results: { selections: [], metadata: {} },
-  chart: null,
-  // 灯箱
-  lightbox: { open: false, variant: null, pages: [], currentIndex: 0 },
+  seed: Math.random().toString(36).slice(2, 10),  // 每次刷新变化
+  library: [],        // [{code, page_count, input, tags}, ...]
+  mappings: {},       // code → {page_count, input, tags}（后端返回的映射）
+  codeToCase: {},     // code → case_id（前端缓存，反查用，不传给 UI）
+  selectedA: null,
+  selectedB: null,
+  comparisons: 0,
+  totalComparisons: 0,
+  caseStats: {},      // case_id → 已盲测次数
+  currentCaseA: null,
+  currentCaseB: null,
+  currentPagesA: [],
+  currentPagesB: [],
+  lightboxVariant: null,  // 'A' | 'B'
+  lightboxPage: 0,
+  lightboxPages: [],
 };
 
-// ============== API 调用 ==============
-async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${path} failed: ${res.status} - ${text.slice(0, 200)}`);
-  }
-  const ct = res.headers.get('content-type') || '';
-  if (ct.includes('application/json')) return res.json();
-  return res.text();
+// ===== 工具 =====
+async function api(path, options = {}) {
+  const resp = await fetch(path, options);
+  if (!resp.ok) throw new Error(`API ${path} failed: ${resp.status}`);
+  return resp.json();
 }
 
-async function checkHealth() {
+function showPage(name) {
+  document.getElementById('library').style.display = name === 'library' ? 'block' : 'none';
+  document.getElementById('compare').classList.toggle('active', name === 'compare');
+  document.getElementById('doneState').classList.toggle('active', name === 'done');
+}
+
+function updateProgress() {
+  document.getElementById('progressText').textContent = `${state.comparisons} / ${state.totalComparisons}`;
+  const pct = state.totalComparisons > 0 ? (state.comparisons / state.totalComparisons * 100) : 0;
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+// ===== 加载 case 库 =====
+async function loadLibrary() {
+  const data = await api(`/api/library?seed=${state.seed}`);
+  // 后端只给 code + 元信息，没给 case_id。需要去另一个端点拿 code → case_id 映射。
+  // 实际：后端没给这个映射——所以前端需要"猜测"。
+  // 解决：让后端也返回 code→case_id 映射给前端（在 /api/library 中），但 UI 不显示。
+  state.library = data.cases;
+  state.codeToCase = data.code_to_case || {};  // ← 等待后端加这个字段
+  document.getElementById('libraryCount').textContent = `（共 ${data.total} 个）`;
+  renderLibrary();
+}
+
+function renderLibrary() {
+  const grid = document.getElementById('caseGrid');
+  grid.innerHTML = '';
+  for (const c of state.library) {
+    const card = document.createElement('div');
+    card.className = 'case-card';
+    card.dataset.code = c.code;
+    const stats = state.caseStats[c.code] || 0;
+    const role = (state.selectedA === c.code) ? 'A' : (state.selectedB === c.code) ? 'B' : '';
+    card.innerHTML = `
+      <span class="role" style="display:${role ? 'block' : 'none'}">${role}</span>
+      <span class="code">${c.code}</span>
+      <div class="meta">
+        <span class="badge">${c.page_count} 页</span>
+        ${c.tags.map(t => `<span class="badge">${t}</span>`).join('')}
+      </div>
+      <div class="input">${c.input || '（无描述）'}</div>
+      <div class="stats">已盲测 <strong>${stats}</strong> 次</div>
+    `;
+    card.onclick = () => onCaseClick(c.code);
+    if (state.selectedA && state.selectedA !== c.code && state.selectedB && state.selectedB !== c.code) {
+      card.classList.add('disabled');
+    }
+    grid.appendChild(card);
+  }
+}
+
+function onCaseClick(code) {
+  if (state.selectedA === code) { state.selectedA = null; }
+  else if (state.selectedB === code) { state.selectedB = null; }
+  else if (!state.selectedA) { state.selectedA = code; }
+  else if (!state.selectedB) { state.selectedB = code; }
+  else { state.selectedB = code; }  // 替换第二个
+  renderLibrary();
+  if (state.selectedA && state.selectedB) {
+    setTimeout(() => startCompare(), 300);
+  }
+}
+
+// ===== 开始对比 =====
+async function startCompare() {
+  const codeA = state.selectedA, codeB = state.selectedB;
+  // 用 code 反查 case_id（前端从 /api/library 已拿到映射，但要先在后端加上 code_to_case 字段）
+  // 临时方案：前端通过 /api/case/<id>/pages 探测——但需要 case_id。
+  // 等待后端加 code_to_case 字段。
+  if (!state.codeToCase[codeA] || !state.codeToCase[codeB]) {
+    alert('后端需返回 code_to_case 映射');
+    return;
+  }
+  const caseA = state.codeToCase[codeA], caseB = state.codeToCase[codeB];
+  state.currentCaseA = caseA; state.currentCaseB = caseB;
+
+  const [pagesAData, pagesBData] = await Promise.all([
+    api(`/api/case/${caseA}/pages`),
+    api(`/api/case/${caseB}/pages`),
+  ]);
+  state.currentPagesA = pagesAData.pages;
+  state.currentPagesB = pagesBData.pages;
+
+  document.getElementById('codeA').textContent = codeA;
+  document.getElementById('codeB').textContent = codeB;
+  document.getElementById('pagesA').textContent = `(${pagesAData.page_count} 页)`;
+  document.getElementById('pagesB').textContent = `(${pagesBData.page_count} 页)`;
+  document.getElementById('seedText').textContent = state.seed;
+  renderThumbs('thumbsA', state.currentPagesA, 'A');
+  renderThumbs('thumbsB', state.currentPagesB, 'B');
+
+  showPage('compare');
+}
+
+function renderThumbs(containerId, pages, variant) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  pages.forEach((p, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+    thumb.innerHTML = `
+      <iframe src="${p.url}" loading="lazy" sandbox="allow-same-origin"></iframe>
+      <span class="page-num">P${p.page}</span>
+    `;
+    thumb.onclick = () => openLightbox(variant, i);
+    container.appendChild(thumb);
+  });
+}
+
+// ===== 灯箱 =====
+function openLightbox(variant, pageIdx) {
+  state.lightboxVariant = variant;
+  state.lightboxPage = pageIdx;
+  state.lightboxPages = variant === 'A' ? state.currentPagesA : state.currentPagesB;
+  const code = variant === 'A' ? state.selectedA : state.selectedB;
+  document.getElementById('lightboxTitle').textContent = `${code} - 第 ${pageIdx + 1} 页`;
+  document.getElementById('lightboxIframe').src = state.lightboxPages[pageIdx].url;
+  document.getElementById('lbPage').textContent = `${pageIdx + 1} / ${state.lightboxPages.length}`;
+  document.getElementById('lightbox').classList.add('active');
+}
+
+function closeLightbox() { document.getElementById('lightbox').classList.remove('active'); }
+function lightboxPrev() {
+  if (state.lightboxPage > 0) openLightbox(state.lightboxVariant, state.lightboxPage - 1);
+}
+function lightboxNext() {
+  if (state.lightboxPage < state.lightboxPages.length - 1) openLightbox(state.lightboxVariant, state.lightboxPage + 1);
+}
+
+// ===== 选择 =====
+async function makeChoice(chosenCode) {
+  const confidence = parseInt(document.getElementById('confidence').value) || 3;
+  const caseA = state.currentCaseA, caseB = state.currentCaseB;
+  let chosenCase;
+  if (chosenCode === 'tie') {
+    chosenCase = caseA;  // 难分伯仲记录为选 A
+  } else {
+    const code = chosenCode === 'A' ? state.selectedA : state.selectedB;
+    chosenCase = state.codeToCase[code];
+  }
+
+  await fetch('/api/compare/select', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({case_a: caseA, case_b: caseB, chosen: chosenCase, confidence}),
+  });
+
+  // 更新本地统计
+  state.caseStats[state.selectedA] = (state.caseStats[state.selectedA] || 0) + 1;
+  state.caseStats[state.selectedB] = (state.caseStats[state.selectedB] || 0) + 1;
+  state.comparisons += 1;
+  updateProgress();
+
+  // 加载实际 results 数量作为 total
+  await refreshResults();
+  showPage('library');
+  state.selectedA = null; state.selectedB = null;
+  renderLibrary();
+}
+
+async function refreshResults() {
+  const data = await api('/api/results');
+  state.totalComparisons = data.metadata?.total || data.comparisons?.length || 0;
+  // 用实际比较数作为进度分母（避免无限循环）
+  if (state.totalComparisons === 0) state.totalComparisons = state.library.length >= 2 ? 5 : state.library.length;  // 兜底
+  updateProgress();
+}
+
+// ===== 上传 =====
+function showUploadModal() { document.getElementById('uploadModal').classList.add('active'); }
+function hideUploadModal() { document.getElementById('uploadModal').classList.remove('active'); }
+
+async function uploadCase() {
+  const caseId = document.getElementById('uploadCaseId').value.trim();
+  const input = document.getElementById('uploadInput').value.trim();
+  const files = document.getElementById('uploadFiles').files;
+  if (files.length === 0) { alert('请选择 HTML 文件'); return; }
+
+  const formData = new FormData();
+  if (caseId) formData.append('case_id', caseId);
+  formData.append('input', input);
+  for (const f of files) formData.append('files', f);
+
+  const resp = await fetch('/api/case/upload', {method: 'POST', body: formData});
+  if (!resp.ok) {
+    const err = await resp.text();
+    alert('上传失败：' + err);
+    return;
+  }
+  const data = await resp.json();
+  alert(`✅ 上传成功：${data.case_id}（${data.page_count} 页）`);
+  hideUploadModal();
+  await loadLibrary();
+}
+
+// ===== 事件绑定 =====
+document.getElementById('btnBack').onclick = () => { showPage('library'); state.selectedA = null; state.selectedB = null; renderLibrary(); };
+document.getElementById('btnBack2').onclick = () => { showPage('library'); renderLibrary(); };
+document.getElementById('btnChooseA').onclick = () => makeChoice('A');
+document.getElementById('btnChooseB').onclick = () => makeChoice('B');
+document.getElementById('btnTie').onclick = () => makeChoice('tie');
+document.getElementById('btnReset').onclick = async () => {
+  if (!confirm('确认清空所有人工盲测结果？此操作不可恢复。')) return;
+  await fetch('/api/reset', {method: 'POST'});
+  state.caseStats = {}; state.comparisons = 0; state.totalComparisons = 0;
+  updateProgress(); renderLibrary();
+};
+document.getElementById('btnUpload').onclick = showUploadModal;
+document.getElementById('btnUploadCancel').onclick = hideUploadModal;
+document.getElementById('btnUploadConfirm').onclick = uploadCase;
+document.getElementById('lbClose').onclick = closeLightbox;
+document.getElementById('lbPrev').onclick = lightboxPrev;
+document.getElementById('lbNext').onclick = lightboxNext;
+document.addEventListener('keydown', (e) => {
+  if (document.getElementById('lightbox').classList.contains('active')) {
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') lightboxPrev();
+    else if (e.key === 'ArrowRight') lightboxNext();
+  }
+});
+
+// ===== 健康检查 + warn banner =====
+async function loadHealth() {
   try {
-    const data = await api('/api/health');
-    const banner = document.getElementById('warning-banner');
-    if (!data.ready) {
-      const missing = [];
-      if (!data.libreoffice.available) missing.push('LibreOffice');
-      if (!data.pymupdf.available) missing.push('PyMuPDF');
-      banner.textContent = `⚠️ 检测到 ${data.pptx_case_count} 个 PPTX case，但依赖缺失：${missing.join('、')}。HTML case 不受影响，PPTX 渲染将失败。` +
-        '\n' + (data.libreoffice.message || '');
-      banner.classList.add('show', 'error');
-    } else if (data.pptx_case_count > 0) {
-      banner.textContent = `ℹ️ 当前有 ${data.pptx_case_count} 个 PPTX case，已自动启用 LibreOffice 渲染。`;
-      banner.classList.add('show');
-      banner.classList.remove('error');
-    } else {
-      banner.classList.remove('show', 'error');
+    const h = await api('/api/health');
+    if (!h.libreoffice.available && h.case_count > 0) {
+      // 暂不警告（library mode 主要是 HTML）
     }
   } catch (e) {
     console.warn('health check failed', e);
   }
 }
 
-async function loadCases() {
-  const data = await api('/api/cases');
-  state.cases = data.cases;
-}
-
-async function loadResults() {
-  state.results = await api('/api/results');
-  state.pending = state.results.pending_case_ids;
-  updateStats();
-  renderChart();
-}
-
-async function loadInput(caseId) {
-  const data = await api(`/api/case/${caseId}/input`);
-  document.getElementById('input-content').textContent = data.input || '（无输入）';
-}
-
-async function loadVariant(caseId, variant) {
-  // HTML 走 text/html，PPTX 走 JSON
-  // 用 Accept 头让 server 知道我们想要什么？不需要——server 自己判断文件类型
-  const url = `/api/case/${caseId}/render/${variant}`;
-  // 先尝试 fetch 看 content-type
-  const res = await fetch(url);
-  const ct = res.headers.get('content-type') || '';
-  if (ct.includes('application/json')) {
-    const data = await res.json();
-    if (data.error) {
-      return { type: 'error', message: data.message || 'unknown' };
-    }
-    return { type: data.type, payload: data };
-  } else {
-    // HTML：把内容放到 src doc 里
-    const html = await res.text();
-    return { type: 'html', payload: html };
-  }
-}
-
-// ============== 渲染 ==============
-function updateStats() {
-  const total = state.cases.length;
-  const completed = state.results.completed_case_ids.length;
-  const pending = state.pending.length;
-  const aCount = state.results.selections.filter(s => s.chosen === 'A').length;
-  const aRatio = completed > 0 ? Math.round((aCount / completed) * 100) + '%' : '-';
-
-  document.getElementById('stat-completed').textContent = completed;
-  document.getElementById('stat-pending').textContent = pending;
-  document.getElementById('stat-a-ratio').textContent = aRatio;
-
-  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  document.getElementById('progress-fill').style.width = pct + '%';
-  document.getElementById('progress-text').textContent = `${completed} / ${total}`;
-}
-
-function renderChart() {
-  if (!state.chart) state.chart = echarts.init(document.getElementById('chart-progress'));
-  const completed = state.results.completed_case_ids.length;
-  const pending = state.pending.length;
-  state.chart.setOption({
-    title: { text: '盲测进度', left: 'left', textStyle: { fontSize: 14, fontWeight: 'normal' } },
-    tooltip: { trigger: 'item' },
-    legend: { bottom: 0, left: 'center' },
-    series: [{
-      type: 'pie', radius: ['50%', '70%'], avoidLabelOverlap: false,
-      label: { show: true, formatter: '{b}: {c}' },
-      data: [
-        { value: completed, name: '已完成', itemStyle: { color: '#67c23a' } },
-        { value: pending, name: '待评估', itemStyle: { color: '#e4e7ed' } },
-      ]
-    }]
-  });
-}
-
-function showEmpty() {
-  document.getElementById('empty-state').style.display = 'block';
-  document.getElementById('case-area').style.display = 'none';
-}
-
-function renderVariant(variant) {
-  // 渲染到 pane-body
-  const data = state.currentVariants[variant];
-  const pane = document.getElementById(`pane-${variant}`);
-  const formatLabel = document.getElementById(`format-${variant}`);
-
-  if (!data) {
-    pane.innerHTML = '<div class="pane-error">未加载</div>';
-    return;
-  }
-
-  if (data.type === 'html') {
-    formatLabel.textContent = 'HTML 渲染';
-    // 用 iframe
-    pane.innerHTML = '';
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'width:100%; height:100%; border:none; background:white;';
-    // 用 srcdoc 注入 HTML（避免 src 跨域）
-    iframe.srcdoc = data.payload;
-    pane.style.padding = '0';
-    pane.appendChild(iframe);
-  } else if (data.type === 'pptx' || data.type === 'multi-html') {
-    const labelText = data.type === 'pptx' ? `PPTX · ${data.payload.page_count} 页` : `HTML · ${data.payload.page_count} 页`;
-    formatLabel.textContent = labelText;
-    pane.style.padding = '8px';
-    // 缩略图网格
-    const grid = document.createElement('div');
-    grid.className = 'thumb-grid';
-    const useIframe = (data.type === 'multi-html');
-    data.payload.pages.forEach((page, idx) => {
-      const thumb = document.createElement('div');
-      thumb.className = 'thumb';
-      const media = useIframe
-        ? `<iframe src="${page.url}" title="第 ${page.page} 页" loading="lazy" sandbox="allow-same-origin"></iframe>`
-        : `<img src="${page.url}" alt="第 ${page.page} 页" loading="lazy" />`;
-      thumb.innerHTML = `
-        <span class="thumb-label">第 ${page.page} 页</span>
-        ${media}
-      `;
-      thumb.onclick = () => openLightbox(variant, idx);
-      grid.appendChild(thumb);
-    });
-    pane.innerHTML = '';
-    pane.appendChild(grid);
-    // 提示文字
-    const hint = document.createElement('div');
-    hint.className = 'hint';
-    hint.style.cssText = 'margin-top:8px; text-align:center;';
-    hint.textContent = `共 ${data.payload.page_count} 页，点击缩略图放大查看`;
-    pane.appendChild(hint);
-  } else if (data.type === 'error') {
-    formatLabel.textContent = '错误';
-    pane.style.padding = '24px';
-    pane.innerHTML = `<div class="pane-error">❌ ${data.message}</div>`;
-  }
-}
-
-async function showCase() {
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('case-area').style.display = 'block';
-  // 找当前 case 的格式信息
-  const caseMeta = state.cases.find(c => c.case_id === state.currentCase);
-  await loadInput(state.currentCase);
-  // 并发加载 A 和 B
-  state.currentVariants.a = await loadVariant(state.currentCase, 'a');
-  state.currentVariants.b = await loadVariant(state.currentCase, 'b');
-  renderVariant('a');
-  renderVariant('b');
-  // 重置信心度
-  state.selectedConfidence = null;
-  document.querySelectorAll('.confidence button').forEach(b => b.classList.remove('selected'));
-  document.getElementById('btn-choose-a').disabled = false;
-  document.getElementById('btn-choose-b').disabled = false;
-}
-
-// ============== 灯箱 ==============
-function openLightbox(variant, pageIdx) {
-  const data = state.currentVariants[variant];
-  if (!data || (data.type !== 'pptx' && data.type !== 'multi-html')) return;
-  state.lightbox.open = true;
-  state.lightbox.variant = variant;
-  state.lightbox.variantType = data.type;
-  state.lightbox.pages = data.payload.pages;
-  state.lightbox.currentIndex = pageIdx;
-  updateLightbox();
-  document.getElementById('lightbox').classList.add('show');
-}
-
-function closeLightbox() {
-  state.lightbox.open = false;
-  document.getElementById('lightbox').classList.remove('show');
-}
-
-function lightboxPrev() {
-  if (!state.lightbox.open) return;
-  state.lightbox.currentIndex = (state.lightbox.currentIndex - 1 + state.lightbox.pages.length) % state.lightbox.pages.length;
-  updateLightbox();
-}
-
-function lightboxNext() {
-  if (!state.lightbox.open) return;
-  state.lightbox.currentIndex = (state.lightbox.currentIndex + 1) % state.lightbox.pages.length;
-  updateLightbox();
-}
-
-function updateLightbox() {
-  const pages = state.lightbox.pages;
-  const cur = state.lightbox.currentIndex;
-  const url = pages[cur].url;
-  const img = document.getElementById('lightbox-img');
-  const frm = document.getElementById('lightbox-frame');
-  if (state.lightbox.variantType === 'multi-html') {
-    img.style.display = 'none';
-    frm.style.display = 'block';
-    frm.src = url;
-  } else {
-    frm.style.display = 'none';
-    img.style.display = 'block';
-    img.src = url;
-  }
-  document.getElementById('lb-info').textContent = `第 ${pages[cur].page} 页 / 共 ${pages.length} 页`;
-}
-
-document.getElementById('lightbox-close').onclick = closeLightbox;
-document.getElementById('lb-prev').onclick = lightboxPrev;
-document.getElementById('lb-next').onclick = lightboxNext;
-document.getElementById('lightbox').onclick = (e) => {
-  if (e.target.id === 'lightbox') closeLightbox();
-};
-
-// ============== 交互 ==============
-async function nextCase() {
-  if (state.pending.length === 0) {
-    state.currentCase = null;
-    document.getElementById('case-area').style.display = 'none';
-    document.getElementById('empty-state').innerHTML = `
-      <h2>🎉 全部完成！</h2>
-      <p>已完成 ${state.results.completed_case_ids.length} 个 case 的人工盲测</p>
-      <p>下一步：用本 Skill 跑 AI 测评，然后执行 <code>python tools/analyze.py</code> 生成对比报告</p>
-    `;
-    document.getElementById('empty-state').style.display = 'block';
-    return;
-  }
-  state.currentCase = state.pending[0];
-  await showCase();
-}
-
-async function choose(variant) {
-  if (!state.currentCase) return;
-  await api('/api/select', {
-    method: 'POST',
-    body: JSON.stringify({
-      case_id: state.currentCase,
-      chosen: variant,
-      confidence: state.selectedConfidence,
-    })
-  });
-  showToast(`已选择方案 ${variant}`);
-  await loadResults();
-  await nextCase();
-}
-
-async function skip() {
-  if (!state.currentCase) return;
-  state.pending.push(state.pending.shift());
-  if (state.pending.length > 0) {
-    state.currentCase = state.pending[0];
-    await showCase();
-  }
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1500);
-}
-
-// 事件绑定
-document.getElementById('btn-choose-a').onclick = () => choose('A');
-document.getElementById('btn-choose-b').onclick = () => choose('B');
-document.getElementById('btn-skip').onclick = skip;
-
-document.querySelectorAll('.confidence button').forEach(btn => {
-  btn.onclick = () => {
-    state.selectedConfidence = parseInt(btn.dataset.c);
-    document.querySelectorAll('.confidence button').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-  };
-});
-
-// 键盘快捷键
-document.addEventListener('keydown', (e) => {
-  // 灯箱打开时优先级
-  if (state.lightbox.open) {
-    if (e.key === 'Escape') closeLightbox();
-    else if (e.key === 'ArrowLeft') lightboxPrev();
-    else if (e.key === 'ArrowRight') lightboxNext();
-    return;
-  }
-  if (e.key === 'ArrowLeft') choose('A');
-  else if (e.key === 'ArrowRight') choose('B');
-  else if (e.key === ' ') { e.preventDefault(); skip(); }
-});
-
-// ============== 启动 ==============
-(async () => {
-  await checkHealth();
-  await loadCases();
-  await loadResults();
-  if (state.cases.length === 0) {
-    showEmpty();
-  } else {
-    await nextCase();
-  }
-})();
+// ===== 启动 =====
+loadLibrary();
+refreshResults();
+loadHealth();
 </script>
-
 </body>
 </html>

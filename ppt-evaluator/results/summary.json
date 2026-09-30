@@ -1,0 +1,74 @@
+{
+  "overall": {
+    "total": 1,
+    "matched": 1,
+    "rate": 1.0,
+    "rate_pct": "100.0%"
+  },
+  "per_dim": [
+    {
+      "dimension": "内容质量",
+      "match": 1,
+      "total": 1,
+      "rate": 1.0,
+      "rate_pct": "100.0%"
+    },
+    {
+      "dimension": "结构逻辑",
+      "match": 1,
+      "total": 1,
+      "rate": 1.0,
+      "rate_pct": "100.0%"
+    },
+    {
+      "dimension": "视觉设计",
+      "match": 0,
+      "total": 1,
+      "rate": 0.0,
+      "rate_pct": "0.0%"
+    },
+    {
+      "dimension": "表达传达",
+      "match": 1,
+      "total": 1,
+      "rate": 1.0,
+      "rate_pct": "100.0%"
+    },
+    {
+      "dimension": "技术规范",
+      "match": 1,
+      "total": 1,
+      "rate": 1.0,
+      "rate_pct": "100.0%"
+    },
+    {
+      "dimension": "版面合规",
+      "match": 1,
+      "total": 1,
+      "rate": 1.0,
+      "rate_pct": "100.0%"
+    },
+    {
+      "dimension": "版式多样性",
+      "match": 1,
+      "total": 1,
+      "rate": 1.0,
+      "rate_pct": "100.0%"
+    }
+  ],
+  "per_case": [
+    {
+      "case_id": "case-003",
+      "wins": 1,
+      "total": 1,
+      "win_rate": "100.0%"
+    },
+    {
+      "case_id": "case-004",
+      "wins": 0,
+      "total": 1,
+      "win_rate": "0.0%"
+    }
+  ],
+  "diverged_count": 0
+}

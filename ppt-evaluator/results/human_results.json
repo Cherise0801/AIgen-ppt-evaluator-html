@@ -1,0 +1,23 @@
+{
+  "comparisons": [
+    {
+      "case_a": "case-003",
+      "case_b": "case-004",
+      "chosen": "case-003",
+      "confidence": 4,
+      "timestamp": "2026-09-30T15:52:11.356371"
+    },
+    {
+      "case_a": "case-003",
+      "case_b": "case-004",
+      "chosen": "case-003",
+      "confidence": 4,
+      "timestamp": "2026-09-30T15:53:34.456460"
+    }
+  ],
+  "metadata": {
+    "created_at": "reset for case-library redesign",
+    "updated_at": "2026-09-30T15:53:34.456468",
+    "total": 2
+  }
+}

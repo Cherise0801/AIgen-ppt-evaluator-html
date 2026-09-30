@@ -1,218 +1,179 @@
-# tools/ - 本地校准工具
+# tools/ - PPT 测评校准工具
 
-用于"人工盲测"和"AI vs 人工对比分析"的本地程序，不依赖任何外部服务。
+本地运行的"人工盲测 + AI 测评"校准工具。给 Skill 自身做"自检"——看 AI 评分跟人判断是否一致。
 
-支持三种 case 格式：
-- **单文件 HTML**（直接 iframe 渲染）
-- **多页 HTML 目录**（`a/` `b/` 子目录，每页一个 HTML，工具自动拼成"翻页 PPT"）
-- **PPTX**（LibreOffice 转 PNG，需额外依赖）
+## 核心理念
 
-## 工作流程
+**Case 库**：每份 PPT 是一份独立 case（不再是 A/B 两个变体），存进 `cases/` 库。
+
+**任意对比**：盲测时从库中任选 2 个 case 做对比，**不限于同一份输入的两个变体**——可以跨主题、跨场景。
+
+**持续累积**：所有跑过人工盲测的 case 都进入基测 case 集，作为后续校准的 ground truth。
+
+## 工作流
 
 ```
-┌────────────────────────────────────────────────────────┐
-│  1. 准备 cases（HTML 或 PPTX 均可，混用也行）           │
-│     - 每个 case 一个子目录                             │
-│     - 含 input.txt（输入描述）                          │
-│     - 含 a.{html|pptx} 或 a/（方案 A）                 │
-│     - 含 b.{html|pptx} 或 b/（方案 B）                 │
-└────────────────────────────────────────────────────────┘
-                          ↓
-┌────────────────────────────────────────────────────────┐
-│  2. 启动 server.py                                     │
-│     python tools/server.py                             │
-│     → 浏览器打开 http://127.0.0.1:5050                  │
-│     → HTML 走 iframe，PPTX 走缩略图网格 + 点击放大      │
-│     → 结果自动存到 results/human_results.json           │
-└────────────────────────────────────────────────────────┘
-                          ↓
-┌────────────────────────────────────────────────────────┐
-│  3. 跑 AI 测评（用本 Skill）                            │
-│     - 用 /ppt-blind 对每对 case 跑一遍                  │
-│     - 把结果整理为 results/ai_results.json              │
-│     - 格式见本 README 下文                              │
-└────────────────────────────────────────────────────────┘
-                          ↓
-┌────────────────────────────────────────────────────────┐
-│  4. 对比分析                                            │
-│     python tools/analyze.py                            │
-│     → 生成 report.md / report.html / summary.json       │
-│     → 包含：一致率、分维度准确率、分歧 case 清单        │
-└────────────────────────────────────────────────────────┘
+1. 准备 case（每个 case 一份多页 HTML PPT）
+   cases/case-XXX/*.html  +  cases/_library.json 索引
+2. 启动 server（python tools/server.py）
+3. 浏览器打开 http://127.0.0.1:5050
+4. 选 2 个 case 卡片 → 进入对比页 → 选 A/B + 信心度
+5. 重复 N 轮盲测
+6. 用本 Skill 跑 AI 测评 → 整理成 results/ai_results.json
+7. 跑 analyze.py → 生成对比报告（report.md + report.html + summary.json）
 ```
 
-## case 目录结构
-
-工具按以下优先级自动识别 case 格式：
-
-| 优先级 | 方案 A 路径 | 方案 B 路径 | 工具识别 |
-|--------|------------|------------|----------|
-| 1 | `a.html` | `b.html` | 单文件 HTML（iframe 整页渲染） |
-| 2 | `a/` 目录 | `b/` 目录 | 多页 HTML（缩略图网格 + 翻页灯箱） |
-| 3 | `a.pptx` | `b.pptx` | PPTX（缩略图网格 + 灯箱） |
-
-### 多页 HTML 模式说明
-
-适用场景：用户用 AI 工具（如 WPS AIPPT）批量生成的"单页 HTML 拼成的 PPT"。每个 HTML 是独立幻灯片，工具按文件名排序拼成可翻页 PPT。
-
-**目录结构**：
-```
-cases/case-001/
-├── input.txt
-├── a/
-│   ├── 第1页.html
-│   ├── 第2页.html
-│   └── ...第N页.html
-└── b/
-    ├── 第1页.html
-    └── ...
-```
-
-文件名按字典序排序，建议用 `第1页.html`、`第2页.html` 这种带前导零或前导数字的命名以保证顺序正确。
-
-## 安装
-
-### 基础依赖（HTML 模式必需）
+## 安装与启动
 
 ```bash
-pip install flask
+# 基础依赖
+pip install flask pymupdf
+
+# PPTX 支持（可选，需先装 LibreOffice）
+# macOS:   brew install --cask libreoffice
+# Ubuntu:  sudo apt install -y libreoffice
+# Windows: 官网下载 https://www.libreoffice.org/download
+
+# 启动
+cd tools/
+python server.py --port 5050
+# 浏览器打开 http://127.0.0.1:5050
 ```
 
-### PPTX 渲染依赖（PPTX 模式必需）
-
-```bash
-# 1. PyMuPDF（PDF → PNG）
-pip install pymupdf
-
-# 2. LibreOffice（PPTX → PDF）
-# macOS
-brew install --cask libreoffice
-# Ubuntu/Debian
-sudo apt install -y libreoffice
-# Windows：官网下载 https://www.libreoffice.org/download/
-```
-
-**PPTX 模式是可选的**：
-- 没装 LibreOffice/PyMuPDF：HTML case 正常用，PPTX case 渲染会失败并在 UI 上提示
-- 装好之后：无需改代码，server.py 启动时自动检测；首次访问 PPTX case 时转换并缓存到 `.cache/`
-
-### 启动服务
-
-```bash
-python tools/server.py
-# → 浏览器访问 http://127.0.0.1:5050
-```
-
-可选参数：
-- `--port 5050`：自定义端口
-- `--host 0.0.0.0`：允许局域网访问（默认 127.0.0.1）
-- `--cases ../cases`：自定义 cases 目录
-- `--results ../results`：自定义结果目录
-- `--cache ../.cache`：自定义 PPTX 缓存目录
-
-## 准备 cases
-
-每个 case 是一个子目录，A 和 B 各自**至少一个** HTML 或 PPTX 文件：
+## Case 库结构
 
 ```
 cases/
-├── case-001/                     # 纯 HTML case
-│   ├── input.txt
-│   ├── a.html
-│   └── b.html
-├── case-002/                     # 纯 PPTX case
-│   ├── input.txt
-│   ├── a.pptx
-│   └── b.pptx
-└── case-003/                     # 混合 case（A 用 PPTX，B 用 HTML）
-    ├── input.txt
-    ├── a.pptx
-    └── b.html
+├── _library.json              # 索引文件（自动维护，可手动编辑）
+├── case-001/                  # 第一个 case
+│   ├── 001.html
+│   ├── 002.html
+│   └── ...
+├── case-002/                  # 第二个 case
+│   ├── slide01.html
+│   ├── slide02.html
+│   └── ...
+└── case-003.pptx              # 也支持 PPTX（需 LibreOffice）
 ```
 
-**规则**：
-- `a` 和 `b` 各自至少存在 `.html` 或 `.pptx` 中的一个
-- HTML 优先：若 `a.html` 和 `a.pptx` 同时存在，使用 `a.html`
-- `a.html` / `a.pptx` 是**同一输入下两个不同来源的生成结果**（如：同一 prompt，模型 A 生成 vs 模型 B 生成，或人做 vs AI 生成）
-- 盲测时**不告诉用户**哪份是哪个来源
-
-## 人工盲测界面
-
-### HTML 模式
-左 A 右 B 双栏布局，通过 iframe 渲染真实的 HTML PPT。
-
-### PPTX 模式
-左 A 右 B 双栏布局，每栏内是该 PPT 的**缩略图网格**（每页一张），点击缩略图弹出全屏灯箱查看大图，灯箱内可用 `←` / `→` 翻页、`Esc` 关闭。
-
-### 通用
-- 盲测选择按钮：**`←` 选 A，`→` 选 B，`Space` 跳过**
-- 可选信心度（1-5），用于分析"人在不同信心度下 AI 一致率"
-- 进度可视化（echarts 饼图 + 顶部进度条）
-- 顶部告警横幅：检测到 PPTX case 但 LibreOffice 缺失时显示提示
-
-## PPTX 渲染细节
-
-**流程**：`a.pptx` → `soffice --headless --convert-to pdf` → `a.pdf` → PyMuPDF 逐页渲染 → `page_NN.png`（150 DPI）
-
-**缓存**：转换结果缓存到 `tools/.cache/<case_id>/<variant>/<hash>/`，基于源文件 mtime + size 生成 hash。文件不变不重转。
-
-**性能参考**（5 页 PPT）：
-- 首次转换：~5-10 秒
-- 缓存命中：~50 毫秒
-
-**已知局限**：
-- 复杂动画会丢失（PPT 转 PDF 时本就不保留）
-- 部分特殊字体可能回退到默认字体
-- 极复杂的 SmartArt 可能简化
-
-## AI 测评结果格式
-
-`results/ai_results.json`：
+### `_library.json` 格式
 
 ```json
 {
-  "skill_version": "1.0.0",
-  "generated_at": "2026-09-30T10:00:00",
-  "evaluations": [
+  "cases": [
     {
       "case_id": "case-001",
-      "chosen": "A",
-      "scores": {
-        "A": {
-          "total": 8.5,
-          "by_dim": {
-            "内容质量": 8,
-            "结构逻辑": 9,
-            "视觉设计": 8.5,
-            "表达传达": 8.5,
-            "技术规范": 9,
-            "版面合规": 10,
-            "版式多样性": 7
-          }
-        },
-        "B": {
-          "total": 7.2,
-          "by_dim": { "...": "..." }
-        }
-      },
-      "confidence": 4,
-      "reasoning": "A 在视觉设计和表达传达上明显优于 B"
+      "input": "基层政府年度述职报告（含未来规划、工作回顾、成果呈现、问题剖析四大模块）",
+      "tags": ["述职报告", "年度汇报"]
+    },
+    {
+      "case_id": "case-002",
+      "input": "汇报规范指南（教你如何做汇报）",
+      "tags": ["汇报规范", "指南"]
     }
   ]
 }
 ```
 
-## 对比分析输出
+### 添加新 case 的两种方式
 
-- `report.md`：Markdown 报告（GitHub 直接渲染）
-- `report.html`：HTML 可视化报告（含 echarts 图表）
-- `summary.json`：机器可读摘要
+**方式 A：UI 上传**
+- 主页右上角点 "📤 上传新 case"
+- 填写输入描述
+- 选择 HTML 文件（可多选）
+- 自动生成 case_id
 
-## 为什么需要这个工具
+**方式 B：手动放文件**
+```bash
+mkdir cases/case-005
+cp /path/to/*.html cases/case-005/
 
-仅靠 AI 测评无法证明 Skill 的可信度。本工具用人工盲测作为 ground truth，反向验证 AI 测评的准确率：
-- **总一致率**：AI 和人判断相同的比例
-- **分维度准确率**：AI 在哪些维度上判断最准/最差
-- **分歧 case 清单**：找出 AI 误判的 case，针对性优化
+# 在 cases/_library.json 末尾加：
+# {"case_id": "case-005", "input": "...", "tags": [...]}
+```
 
-跑一批 case 就有了一批标注数据，越用 Skill 越准。
+## API 文档
+
+| Method | Path | 说明 |
+|--------|------|------|
+| GET  | `/api/health` | 健康检查 + LibreOffice/PyMuPDF 状态 |
+| GET  | `/api/library?seed=xxx` | 返回 case 列表 + 6 位匿名 code + code_to_case 映射 |
+| GET  | `/api/case/<id>/pages` | 返回该 case 的所有页（每页 URL） |
+| GET  | `/api/case/<id>/page/<n>` | 返回单页 HTML 文本（text/html） |
+| POST | `/api/compare/select` | 记录选择 `{case_a, case_b, chosen, confidence}` |
+| GET  | `/api/results` | 所有人盲测结果 |
+| POST | `/api/reset` | 清空所有结果 |
+| POST | `/api/case/upload` | 上传新 case（multipart） |
+
+## 匿名化机制
+
+盲测时 UI **不显示真实 case_id**，只显示 6 位十六进制 code（如 `85DAC9`）。
+
+- **前端**：在请求 `/api/library?seed=xxx` 时生成随机 seed，服务端用 `hash(seed + case_id)` 生成 code
+- **同一 seed** 下 code ↔ case_id 映射稳定（一次盲测过程内不混淆）
+- **不同 seed** 下映射不同（不同盲测者互不干扰）
+- **后端** `/api/library` 同时返回 `code_to_case` 映射（前端反查用，不展示在 UI 上）
+
+## 盲测结果格式
+
+`results/human_results.json`:
+```json
+{
+  "comparisons": [
+    {
+      "case_a": "case-003",
+      "case_b": "case-004",
+      "chosen": "case-003",
+      "confidence": 4,
+      "timestamp": "2026-09-30T15:52:11.356371"
+    }
+  ]
+}
+```
+
+## AI 测评结果格式
+
+`results/ai_results.json`（由本 Skill 的 `/ppt-blind` 命令生成）:
+```json
+{
+  "skill_version": "1.0.0",
+  "evaluator": "claude-3.5-sonnet",
+  "evaluations": [
+    {
+      "case_a": "case-003",
+      "case_b": "case-004",
+      "chosen": "case-003",
+      "confidence": 3,
+      "scores": {
+        "case-003": {"total": 8.2, "by_dim": {"内容质量": 8, "...": "..."}},
+        "case-004": {"total": 7.5, "by_dim": {"...": "..."}}
+      },
+      "reasoning": "case-003 信息密度更高"
+    }
+  ]
+}
+```
+
+## 对比分析
+
+```bash
+python tools/analyze.py
+# 输出：
+#   results/report.md      - Markdown 报告
+#   results/report.html    - 可视化报告（echarts 图表）
+#   results/summary.json   - 机器可读摘要
+```
+
+报告内容：
+1. **总一致率**：AI 选对的比例
+2. **分维度一致率**：哪个维度 AI 和人分歧最大
+3. **各 case 胜率**：哪些 case 在盲测中最常胜出
+4. **分歧 case 对**：人和 AI 选得不一样的具体案例
+5. **改进建议**：基于一致率给出自动诊断
+
+## 注意事项
+
+- 同一对 (case_a, case_b) 可以重复盲测——analyze.py 会投票取多数
+- 上传新 case 时如果 case_id 重复，会自动加后缀（`case-005` → `case-005_2`）
+- PPTX 渲染需要 LibreOffice + pymupdf；没装的话 PPTX case 会被跳过，HTML case 照常工作
+- 匿名化是 UI 层的——`/api/results` 返回的是真实 case_id，方便分析

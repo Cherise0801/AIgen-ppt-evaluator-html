@@ -1,5 +1,5 @@
 """
-PPT 测评校准工具 - AI vs 人工对比分析
+PPT 测评校准工具 - AI vs 人工对比分析（Case 库版）
 
 用法：python analyze.py [--results ../results] [--output ../results]
 
@@ -12,69 +12,114 @@ PPT 测评校准工具 - AI vs 人工对比分析
   - results/report.html（可视化 HTML 报告，含 echarts 图表）
   - results/summary.json（机器可读摘要）
 
-ai_results.json 期望结构：
-{
-  "skill_version": "1.0.0",
-  "evaluations": [
+新数据模型（Case 库版）：
+  human_results.json:
     {
-      "case_id": "case-001",
-      "chosen": "A" | "B",                  # AI 推荐的方案
-      "scores": {                            # 7 维加权评分
-        "A": {"total": 8.5, "by_dim": {"内容质量": 8, "结构逻辑": 9, ...}},
-        "B": {"total": 7.2, "by_dim": {"内容质量": 7, "结构逻辑": 8, ...}}
-      },
-      "confidence": 1-5,                     # AI 推荐的信心度（可选）
-      "reasoning": "..."                     # AI 的判断理由（可选）
+      "comparisons": [
+        {"case_a": "case-003", "case_b": "case-004", "chosen": "case-003", "confidence": 4, "timestamp": "..."},
+        ...
+      ]
     }
-  ]
-}
+
+  ai_results.json:
+    {
+      "skill_version": "1.0.0",
+      "evaluations": [
+        {
+          "case_a": "case-003",
+          "case_b": "case-004",
+          "chosen": "case-003",                            # AI 推荐的 case
+          "scores": {                                       # 两个 case 的 7 维评分
+            "case-003": {"total": 8.5, "by_dim": {"内容质量": 8, ...}},
+            "case-004": {"total": 7.2, "by_dim": {"内容质量": 7, ...}}
+          },
+          "confidence": 4,
+          "reasoning": "...",
+          "evaluator": "comate-1.0"
+        }
+      ]
+    }
 """
 
 import argparse
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional
 
 # 7 维评分维度顺序（用于报告和图表）
 DIMENSIONS = ["内容质量", "结构逻辑", "视觉设计", "表达传达", "技术规范", "版面合规", "版式多样性"]
 
 
-def load_json(path: Path):
+def load_json(path: Path) -> Optional[dict]:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def merge_results(human: dict, ai: dict) -> list:
-    """
-    合并人工和 AI 结果，按 case_id 对齐。
+def normalize_pair(case_a: str, case_b: str) -> tuple:
+    """规范化对 (a, b)：总是小的 case_id 在前，确保 (A,B) 和 (B,A) 算同一对。"""
+    return tuple(sorted([case_a, case_b]))
 
-    返回：[{"case_id": "case-001", "human": "A"|"B", "ai": "A"|"B", "match": bool, "human_confidence": int, "ai_confidence": int, "ai_scores": {...}}, ...]
-    """
-    human_map = {s["case_id"]: s for s in human.get("selections", [])}
-    ai_map = {e["case_id"]: e for e in ai.get("evaluations", [])}
 
-    all_case_ids = sorted(set(human_map.keys()) | set(ai_map.keys()))
+def merge_results(human: dict, ai: dict) -> List[dict]:
+    """
+    合并人工和 AI 结果，按 (case_a, case_b) 对齐。
+
+    返回：[{"pair": (case-003, case-004), "human": "case-003", "ai": "case-003", "match": bool, ...}, ...]
+    """
+    # 规范化人类结果（按对聚合）
+    human_pairs: Dict[tuple, dict] = {}
+    for s in human.get("comparisons", []):
+        pair = normalize_pair(s["case_a"], s["case_b"])
+        if pair not in human_pairs:
+            human_pairs[pair] = {"pair": pair, "human_choices": [], "human_confidences": []}
+        human_pairs[pair]["human_choices"].append(s.get("chosen"))
+        human_pairs[pair]["human_confidences"].append(s.get("confidence"))
+
+    # 规范化 AI 结果
+    ai_pairs: Dict[tuple, dict] = {}
+    for e in ai.get("evaluations", []):
+        pair = normalize_pair(e["case_a"], e["case_b"])
+        ai_pairs[pair] = {
+            "pair": pair,
+            "ai_chosen": e.get("chosen"),
+            "ai_confidence": e.get("confidence"),
+            "ai_scores": e.get("scores"),
+            "ai_reasoning": e.get("reasoning"),
+        }
+
+    all_pairs = sorted(set(human_pairs.keys()) | set(ai_pairs.keys()))
     merged = []
-    for cid in all_case_ids:
-        h = human_map.get(cid)
-        a = ai_map.get(cid)
+    for pair in all_pairs:
+        h = human_pairs.get(pair)
+        a = ai_pairs.get(pair)
+        # 多数选择（如果人多次评估同一对）
+        human_chosen = None
+        if h and h["human_choices"]:
+            # 选最多的；同票选第一个
+            from collections import Counter
+            cnt = Counter(h["human_choices"])
+            human_chosen = cnt.most_common(1)[0][0]
         merged.append({
-            "case_id": cid,
-            "human": h.get("chosen") if h else None,
-            "human_confidence": h.get("confidence") if h else None,
-            "ai": a.get("chosen") if a else None,
-            "ai_confidence": a.get("confidence") if a else None,
-            "ai_scores": a.get("scores") if a else None,
-            "ai_reasoning": a.get("reasoning") if a else None,
-            "match": (h and a) and (h.get("chosen") == a.get("chosen")),
+            "pair": pair,
+            "case_a": pair[0],
+            "case_b": pair[1],
+            "human": human_chosen,
+            "human_votes": h["human_choices"] if h else [],
+            "human_confidences": h["human_confidences"] if h else [],
+            "ai": a["ai_chosen"] if a else None,
+            "ai_confidence": a["ai_confidence"] if a else None,
+            "ai_scores": a["ai_scores"] if a else None,
+            "ai_reasoning": a["ai_reasoning"] if a else None,
+            "match": (human_chosen is not None and a and a["ai_chosen"] == human_chosen),
         })
     return merged
 
 
-def calc_overall_rate(merged: list) -> dict:
+def calc_overall_rate(merged: List[dict]) -> dict:
     """计算总一致率"""
-    valid = [m for m in merged if m["match"] is not None and (m["match"] is True or m["match"] is False)]
+    valid = [m for m in merged if m["match"] is not None]
     if not valid:
         return {"total": 0, "matched": 0, "rate": 0.0, "rate_pct": "0.0%"}
     matched = sum(1 for m in valid if m["match"])
@@ -86,35 +131,35 @@ def calc_overall_rate(merged: list) -> dict:
     }
 
 
-def calc_per_dim_rate(merged: list) -> list:
+def calc_per_dim_rate(merged: List[dict]) -> List[dict]:
     """
-    按维度拆分一致率：
+    按维度拆分一致率。
 
-    对每个维度，比较 AI 评分（高分者为人选择）vs 实际人选择。
-    比如某 case 选了 A：
-      - 看 AI 评分中哪个维度 A 比 B 分高（这些维度 AI 倾向 A）
-      - 统计这些维度中"AI 倾向 A"且"人选 A"的比例
+    对每个 case 对，比较 AI 在某维度上倾向谁 vs 实际人选择谁。
+    某 case 对选了 case-003：
+      - 看 AI scores 中 case-003 vs case-004 在该维度的分
+      - 如果 case-003 更高，AI 在该维度倾向 case-003（与人一致 → match）
     """
     valid = [m for m in merged if m["match"] is not None and m["ai_scores"]]
     if not valid:
         return []
 
-    # 思路：每个 case，每个维度，AI 是否倾向"人选择"的那个
     dim_stats = {d: {"match": 0, "total": 0} for d in DIMENSIONS}
     for m in valid:
         scores = m["ai_scores"]
-        a = scores.get("A", {}).get("by_dim", {})
-        b = scores.get("B", {}).get("by_dim", {})
+        case_a = m["case_a"]
+        case_b = m["case_b"]
+        a_score = scores.get(case_a, {}).get("by_dim", {})
+        b_score = scores.get(case_b, {}).get("by_dim", {})
         human_choice = m["human"]
         for d in DIMENSIONS:
-            a_score = a.get(d)
-            b_score = b.get(d)
-            if a_score is None or b_score is None:
+            a_v = a_score.get(d)
+            b_v = b_score.get(d)
+            if a_v is None or b_v is None:
                 continue
             dim_stats[d]["total"] += 1
-            # AI 在该维度倾向谁
-            ai_pref = "A" if a_score > b_score else ("B" if b_score > a_score else None)
-            # 如果该维度 AI 倾向"人选择"，算 match
+            # AI 在该维度倾向谁（分数高的）
+            ai_pref = case_a if a_v > b_v else (case_b if b_v > a_v else None)
             if ai_pref == human_choice:
                 dim_stats[d]["match"] += 1
     return [
@@ -129,291 +174,248 @@ def calc_per_dim_rate(merged: list) -> list:
     ]
 
 
-def calc_confidence_accuracy(merged: list) -> list:
-    """按信心度（人工）分组，计算一致率"""
-    groups = {}
+def calc_per_case_stats(merged: List[dict]) -> List[dict]:
+    """每个 case 的盲测统计（作为 / 败场数）。"""
+    case_wins = {}
+    case_total = {}
     for m in merged:
-        if m["match"] is None or m["human_confidence"] is None:
-            continue
-        c = m["human_confidence"]
-        if c not in groups:
-            groups[c] = {"match": 0, "total": 0}
-        groups[c]["total"] += 1
-        if m["match"]:
-            groups[c]["match"] += 1
+        if m["match"] is not None:
+            for c in m["pair"]:
+                case_total[c] = case_total.get(c, 0) + 1
+        if m["human"]:
+            case_wins[m["human"]] = case_wins.get(m["human"], 0) + 1
     return [
-        {
-            "confidence": c,
-            "match": g["match"],
-            "total": g["total"],
-            "rate": g["match"] / g["total"] if g["total"] else 0,
-            "rate_pct": f"{(g['match'] / g['total'] * 100):.1f}%" if g["total"] else "-",
-        }
-        for c, g in sorted(groups.items())
+        {"case_id": c, "wins": case_wins.get(c, 0), "total": case_total.get(c, 0),
+         "win_rate": f"{(case_wins.get(c, 0) / case_total[c] * 100):.1f}%" if case_total.get(c) else "-"}
+        for c in sorted(case_total.keys())
     ]
 
 
-def find_disagreements(merged: list) -> list:
-    """列出 AI 和人判断不一致的 case"""
-    return [m for m in merged if m["match"] is False]
-
-
-def generate_markdown(overall, per_dim, confidence, disagreements, human_meta, ai_meta):
+def generate_markdown_report(merged: List[dict], overall: dict, per_dim: List[dict], per_case: List[dict], human: dict, ai: dict) -> str:
     """生成 Markdown 报告"""
     lines = []
-    lines.append("# PPT 测评校准报告\n")
-    lines.append(f"> 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-    lines.append(f"> 人工盲测样本：{overall['total']} 个 case\n")
-    if ai_meta:
-        lines.append(f"> AI 测评版本：{ai_meta.get('skill_version', 'unknown')}\n")
-    lines.append("\n---\n\n")
+    lines.append("# PPT 测评校准报告")
+    lines.append("")
+    lines.append(f"**生成时间**：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"**人工盲测总数**：{len(human.get('comparisons', []))} 次（覆盖 {overall.get('total', 0)} 个 case 对）")
+    lines.append(f"**AI 测评总数**：{len(ai.get('evaluations', []))} 次")
+    lines.append("")
 
-    # 1. 总览
-    lines.append("## 1. 总体一致率\n\n")
-    lines.append(f"| 指标 | 数值 |\n|------|------|\n")
-    lines.append(f"| 比对的 case 总数 | {overall['total']} |\n")
-    lines.append(f"| AI 与人判断一致 | {overall['matched']} |\n")
-    lines.append(f"| **一致率** | **{overall['rate_pct']}** |\n\n")
+    lines.append("## 1. 总一致率")
+    lines.append("")
+    lines.append(f"- 对齐 case 对：**{overall['total']}**")
+    lines.append(f"- AI 选对了：**{overall['matched']}**")
+    lines.append(f"- **一致率：{overall['rate_pct']}**")
+    lines.append("")
 
-    # 评级
-    rate = overall["rate"]
-    if rate >= 0.85:
-        grade = "✅ 优秀（AI 测评可信度高）"
-    elif rate >= 0.70:
-        grade = "⚠️ 良好（AI 测评基本可信，仍有提升空间）"
-    elif rate >= 0.50:
-        grade = "⚠️ 一般（AI 测评与人工判断存在较大分歧）"
-    else:
-        grade = "❌ 较差（AI 测评需要优化）"
-    lines.append(f"**评级**：{grade}\n\n")
-
-    # 2. 分维度一致率
-    lines.append("## 2. 分维度一致率\n\n")
-    lines.append("> 统计每个维度上，AI 评分倾向的方案是否与人工选择一致。\n\n")
-    lines.append("| 维度 | 一致 case | 总 case | 一致率 |\n|------|-----------|---------|--------|\n")
+    lines.append("## 2. 分维度一致率")
+    lines.append("")
+    lines.append("| 维度 | AI 倾向与人一致次数 | 有效总次数 | 一致率 |")
+    lines.append("|------|---------------------|------------|--------|")
     for d in per_dim:
-        if d["total"] > 0:
-            lines.append(f"| {d['dimension']} | {d['match']} | {d['total']} | {d['rate_pct']} |\n")
-    lines.append("\n")
-    # 找出最弱维度
-    if per_dim:
-        worst = min(per_dim, key=lambda x: x["rate"] if x["total"] else 1.0)
-        if worst["total"] > 0:
-            lines.append(f"**最弱维度**：{worst['dimension']}（一致率 {worst['rate_pct']}）— AI 在该维度上的判断与人工分歧最大，建议重点优化\n\n")
+        lines.append(f"| {d['dimension']} | {d['match']} | {d['total']} | {d['rate_pct']} |")
+    lines.append("")
 
-    # 3. 信心度 vs 准确率
-    lines.append("## 3. 信心度 vs 准确率\n\n")
-    if confidence:
-        lines.append("> 按人工评分时的信心度分组，看 AI 在不同信心度 case 上的一致率。\n\n")
-        lines.append("| 信心度 | 一致 | 总数 | 一致率 |\n|--------|------|------|--------|\n")
-        for c in confidence:
-            lines.append(f"| {c['confidence']} | {c['match']} | {c['total']} | {c['rate_pct']} |\n")
-        lines.append("\n")
+    if per_case:
+        lines.append("## 3. 各 case 表现（人工盲测维度）")
+        lines.append("")
+        lines.append("| Case | 胜场 | 参与对数 | 胜率 |")
+        lines.append("|------|------|----------|------|")
+        for c in per_case:
+            lines.append(f"| {c['case_id']} | {c['wins']} | {c['total']} | {c['win_rate']} |")
+        lines.append("")
+
+    lines.append("## 4. 分歧 case 对")
+    lines.append("")
+    diverged = [m for m in merged if m["match"] is False]
+    if not diverged:
+        lines.append("无分歧。")
     else:
-        lines.append("_（人工盲测时未提供信心度数据）_\n\n")
+        for m in diverged:
+            lines.append(f"### {m['case_a']} vs {m['case_b']}")
+            lines.append(f"- 人工选择：**{m['human']}**（投票：{m['human_votes']}，信心度：{m['human_confidences']}）")
+            lines.append(f"- AI 选择：**{m['ai']}**（信心度：{m['ai_confidence']}）")
+            if m.get("ai_scores"):
+                lines.append(f"- AI 评分：")
+                for case_id, sc in m["ai_scores"].items():
+                    dims = ", ".join(f"{k}={v}" for k, v in sc.get("by_dim", {}).items())
+                    lines.append(f"  - {case_id}: total={sc.get('total')}, {dims}")
+            if m.get("ai_reasoning"):
+                lines.append(f"- AI 理由：{m['ai_reasoning']}")
+            lines.append("")
 
-    # 4. 分歧 case 清单
-    lines.append("## 4. 分歧 case 清单\n\n")
-    if disagreements:
-        lines.append(f"共 {len(disagreements)} 个 AI 与人工判断不一致的 case：\n\n")
-        lines.append("| Case ID | 人选择 | AI 选择 | AI 推荐理由 |\n|---------|--------|---------|-------------|\n")
-        for d in disagreements:
-            reason = (d.get("ai_reasoning") or "")[:80] + ("..." if d.get("ai_reasoning") and len(d["ai_reasoning"]) > 80 else "")
-            lines.append(f"| {d['case_id']} | {d['human']} | {d['ai']} | {reason} |\n")
-        lines.append("\n")
+    lines.append("## 5. 结论与建议")
+    lines.append("")
+    rate = overall["rate"]
+    if rate >= 0.8:
+        lines.append("✅ AI 测评与人工判断高度一致，模型评分可靠。")
+    elif rate >= 0.6:
+        lines.append("⚠️ AI 测评与人工判断中等一致，建议优化评分 prompt 或权重。")
     else:
-        lines.append("🎉 没有分歧 case\n\n")
+        lines.append("❌ AI 测评与人工判断一致性偏低，需要重点优化：")
+        lines.append("- 检查评分 rubric 是否清晰")
+        lines.append("- 检查 SKILL.md 中提示词是否让 AI 关注人关注的维度")
 
-    # 5. 优化建议
-    lines.append("## 5. 优化建议\n\n")
+    # 找出 AI 表现最差的维度
     if per_dim:
-        sorted_dims = sorted([d for d in per_dim if d["total"] > 0], key=lambda x: x["rate"])
-        lines.append(f"1. **重点优化**：{sorted_dims[0]['dimension']}（一致率 {sorted_dims[0]['rate_pct']}）— 该维度的评分锚点或权重可能需要调整\n")
-        if len(sorted_dims) > 1:
-            lines.append(f"2. **次要关注**：{sorted_dims[1]['dimension']}（一致率 {sorted_dims[1]['rate_pct']}）\n")
-        if overall["rate"] < 0.7:
-            lines.append("3. **整体校准**：一致率偏低，建议在 `references/rubric.md` 中重新审视评分锚点\n")
-    lines.append("4. **收集更多样本**：当前样本量较少，结果可能有偶然性，建议积累 30+ case 再下结论\n")
-    lines.append("5. **关注分歧 case**：手动 review 第 4 节列出的 case，理解为什么 AI 和人判断不同\n")
+        worst = min(per_dim, key=lambda x: x["rate"] if x["total"] > 0 else 1.0)
+        if worst["total"] > 0 and worst["rate"] < 0.6:
+            lines.append(f"- 分维度看，**{worst['dimension']}** 一致率最低（{worst['rate_pct']}），AI 在此维度与人工判断分歧最大，建议重点优化。")
 
-    return "".join(lines)
+    return "\n".join(lines)
 
 
-def generate_html(overall, per_dim, confidence, disagreements, human_meta, ai_meta):
-    """生成 HTML 可视化报告"""
-    # 转成 JSON 字符串嵌入
-    chart_data = {
-        "overall": overall,
-        "per_dim": per_dim,
-        "confidence": confidence,
-        "disagreement_count": len(disagreements),
+def generate_html_report(merged: List[dict], overall: dict, per_dim: List[dict], per_case: List[dict]) -> str:
+    """生成可视化 HTML 报告（含 echarts 图表）。"""
+    import html as htmllib
+
+    md = generate_markdown_report(merged, overall, per_dim, per_case, {"comparisons": []}, {"evaluations": []})
+    md_html = htmllib.escape(md)
+    # 简单 markdown → html（标题/列表/表格）
+    import re
+    md_html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", md_html, flags=re.MULTILINE)
+    md_html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", md_html, flags=re.MULTILINE)
+    md_html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", md_html, flags=re.MULTILINE)
+    md_html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", md_html)
+    md_html = re.sub(r"`([^`]+)`", r"<code>\1</code>", md_html)
+    md_html = re.sub(r"^- (.+)$", r"<li>\1</li>", md_html, flags=re.MULTILINE)
+    md_html = re.sub(r"((?:<li>.*</li>\n?)+)", r"<ul>\1</ul>", md_html)
+    md_html = re.sub(r"^\| (.+) \|$", lambda m: "<tr>" + "".join(f"<td>{c.strip()}</td>" for c in m.group(1).split("|")) + "</tr>", md_html, flags=re.MULTILINE)
+    md_html = re.sub(r"((?:<tr>.*</tr>\n?)+)", r"<table border=1 cellspacing=0 cellpadding=6>\1</table>", md_html)
+
+    # 准备 echarts 数据
+    dim_data = {
+        "categories": [d["dimension"] for d in per_dim],
+        "rates": [round(d["rate"] * 100, 1) for d in per_dim],
     }
-    chart_data_json = json.dumps(chart_data, ensure_ascii=False)
+    case_data = {
+        "categories": [c["case_id"] for c in per_case],
+        "wins": [c["wins"] for c in per_case],
+        "totals": [c["total"] for c in per_case],
+    }
 
-    # 分歧 case 列表
-    disagree_html = ""
-    for d in disagreements:
-        reason = (d.get("ai_reasoning") or "").replace("<", "&lt;").replace(">", "&gt;")
-        disagree_html += f"<tr><td>{d['case_id']}</td><td>{d['human']}</td><td>{d['ai']}</td><td>{reason}</td></tr>"
-
-    # echarts 引用本地 static
     return f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>PPT 测评校准报告</title>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>PPT 测评校准报告</title>
 <script src="../tools/static/echarts.min.js"></script>
 <style>
-  body {{ font-family: -apple-system, sans-serif; background: #f5f7fa; color: #303133; margin: 0; padding: 24px; }}
-  h1, h2 {{ color: #303133; }}
-  .card {{ background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); }}
-  .summary {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }}
-  .stat {{ text-align: center; padding: 16px; background: #f5f7fa; border-radius: 6px; }}
-  .stat .num {{ font-size: 32px; font-weight: 700; color: #409eff; }}
-  .stat .label {{ color: #606266; font-size: 12px; margin-top: 4px; }}
-  .chart {{ width: 100%; height: 320px; }}
-  table {{ width: 100%; border-collapse: collapse; }}
-  th, td {{ padding: 8px 12px; text-align: left; border-bottom: 1px solid #ebeef5; }}
-  th {{ background: #fafbfc; color: #606266; font-weight: 600; }}
-</style>
-</head>
+  body {{ font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 1100px; margin: 30px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.6; }}
+  h1 {{ border-bottom: 2px solid #2563eb; padding-bottom: 8px; }}
+  h2 {{ margin-top: 32px; color: #1e40af; border-left: 4px solid #2563eb; padding-left: 10px; }}
+  h3 {{ color: #374151; }}
+  table {{ border-collapse: collapse; margin: 12px 0; }}
+  th, td {{ border: 1px solid #e5e7eb; padding: 6px 12px; }}
+  th {{ background: #f3f4f6; }}
+  code {{ background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-size: 13px; }}
+  .chart {{ width: 100%; height: 380px; margin: 20px 0; }}
+  .summary-card {{ display: inline-block; background: #eff6ff; border: 1px solid #93c5fd; padding: 16px 24px; border-radius: 8px; margin: 8px 12px 8px 0; }}
+  .summary-card .label {{ font-size: 12px; color: #6b7280; }}
+  .summary-card .value {{ font-size: 28px; font-weight: 700; color: #1e40af; }}
+</style></head>
 <body>
-<h1>📊 PPT 测评校准报告</h1>
-<p>生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-
-<div class="card">
-  <h2>总体一致率</h2>
-  <div class="summary">
-    <div class="stat"><div class="num" id="overall-rate">-</div><div class="label">一致率</div></div>
-    <div class="stat"><div class="num" id="overall-total">-</div><div class="label">比对 case 总数</div></div>
-    <div class="stat"><div class="num" id="overall-match">-</div><div class="label">一致数</div></div>
-    <div class="stat"><div class="num" id="disagree-count">-</div><div class="label">分歧数</div></div>
-  </div>
+<h1>🎯 PPT 测评校准报告</h1>
+<div>
+  <div class="summary-card"><div class="label">总一致率</div><div class="value">{overall['rate_pct']}</div></div>
+  <div class="summary-card"><div class="label">case 对数</div><div class="value">{overall['total']}</div></div>
+  <div class="summary-card"><div class="label">AI 选对数</div><div class="value">{overall['matched']}</div></div>
 </div>
 
-<div class="card">
-  <h2>分维度一致率</h2>
-  <div id="chart-dim" class="chart"></div>
-</div>
+<div class="chart" id="dimChart"></div>
+<div class="chart" id="caseChart"></div>
 
-<div class="card">
-  <h2>信心度 vs 准确率</h2>
-  <div id="chart-conf" class="chart"></div>
-</div>
-
-<div class="card">
-  <h2>分歧 case 清单（{len(disagreements)} 个）</h2>
-  <table>
-    <tr><th>Case ID</th><th>人选择</th><th>AI 选择</th><th>AI 理由</th></tr>
-    {disagree_html if disagree_html else '<tr><td colspan="4" style="text-align:center;color:#909399;">🎉 无分歧</td></tr>'}
-  </table>
-</div>
+<h2>详细报告</h2>
+<div style="background:#f9fafb; padding:16px; border-radius:6px;">{md_html}</div>
 
 <script>
-const DATA = {chart_data_json};
-const chartDim = echarts.init(document.getElementById('chart-dim'));
-const chartConf = echarts.init(document.getElementById('chart-conf'));
+const dimData = {json.dumps(dim_data, ensure_ascii=False)};
+const caseData = {json.dumps(case_data, ensure_ascii=False)};
 
-// 总览数字
-document.getElementById('overall-rate').textContent = DATA.overall.rate_pct;
-document.getElementById('overall-total').textContent = DATA.overall.total;
-document.getElementById('overall-match').textContent = DATA.overall.matched;
-document.getElementById('disagree-count').textContent = DATA.disagreement_count;
-
-// 分维度柱状图
-chartDim.setOption({{
-  title: {{ text: '每个维度上 AI 与人工判断一致率', left: 'left', textStyle: {{ fontSize: 14, fontWeight: 'normal' }} }},
-  tooltip: {{ trigger: 'axis', formatter: '{{b}}: {{c}}' }},
-  grid: {{ left: 60, right: 30, top: 50, bottom: 30 }},
-  xAxis: {{ type: 'category', data: DATA.per_dim.map(d => d.dimension) }},
-  yAxis: {{ type: 'value', max: 100, axisLabel: {{ formatter: '{{value}}%' }} }},
+const dimChart = echarts.init(document.getElementById('dimChart'));
+dimChart.setOption({{
+  title: {{text: '各维度一致率', left: 'center'}},
+  tooltip: {{trigger: 'axis', formatter: '{{b}}: {{c}}%'}},
+  grid: {{left: 80, right: 40, top: 60, bottom: 40}},
+  xAxis: {{type: 'value', max: 100, axisLabel: {{formatter: '{{value}}%'}}}},
+  yAxis: {{type: 'category', data: dimData.categories}},
   series: [{{
     type: 'bar',
-    data: DATA.per_dim.map(d => ({{
-      value: parseFloat(d.rate_pct),
-      itemStyle: {{ color: parseFloat(d.rate_pct) >= 70 ? '#67c23a' : (parseFloat(d.rate_pct) >= 50 ? '#e6a23c' : '#f56c6c') }}
-    }})),
-    label: {{ show: true, position: 'top', formatter: '{{c}}%' }}
+    data: dimData.rates,
+    itemStyle: {{
+      color: function(p) {{
+        if (p.value >= 80) return '#10b981';
+        if (p.value >= 60) return '#f59e0b';
+        return '#ef4444';
+      }}
+    }},
+    label: {{show: true, position: 'right', formatter: '{{c}}%'}}
   }}]
 }});
 
-// 信心度折线图
-chartConf.setOption({{
-  title: {{ text: '不同信心度下 AI 的一致率', left: 'left', textStyle: {{ fontSize: 14, fontWeight: 'normal' }} }},
-  tooltip: {{ trigger: 'axis' }},
-  grid: {{ left: 60, right: 30, top: 50, bottom: 30 }},
-  xAxis: {{ type: 'category', name: '信心度', data: DATA.confidence.map(c => '信心度 ' + c.confidence) }},
-  yAxis: {{ type: 'value', max: 100, axisLabel: {{ formatter: '{{value}}%' }} }},
-  series: [{{
-    type: 'line',
-    data: DATA.confidence.map(c => parseFloat(c.rate_pct)),
-    label: {{ show: true, formatter: '{{c}}%' }},
-    itemStyle: {{ color: '#409eff' }}
-  }}]
+const caseChart = echarts.init(document.getElementById('caseChart'));
+caseChart.setOption({{
+  title: {{text: '各 case 胜场数（人工盲测）', left: 'center'}},
+  tooltip: {{trigger: 'axis'}},
+  legend: {{data: ['胜场', '参与对数'], top: 30}},
+  grid: {{left: 60, right: 40, top: 80, bottom: 40}},
+  xAxis: {{type: 'category', data: caseData.categories}},
+  yAxis: {{type: 'value'}},
+  series: [
+    {{name: '胜场', type: 'bar', data: caseData.wins, itemStyle: {{color: '#3b82f6'}}}},
+    {{name: '参与对数', type: 'bar', data: caseData.totals, itemStyle: {{color: '#94a3b8'}}}}
+  ]
 }});
 </script>
-</body>
-</html>
-"""
+</body></html>"""
 
 
 def main():
     parser = argparse.ArgumentParser(description="AI vs 人工盲测对比分析")
-    parser.add_argument("--results", type=str, default="../results", help="结果目录（相对于 tools/）")
-    parser.add_argument("--output", type=str, default=None, help="报告输出目录（默认同 results/）")
+    parser.add_argument("--results", default=str(Path(__file__).parent.parent / "results"),
+                        help="results 目录路径")
+    parser.add_argument("--output", default=None, help="输出目录（默认同 results）")
     args = parser.parse_args()
 
-    tools_dir = Path(__file__).parent.resolve()
-    results_dir = (tools_dir / args.results).resolve()
-    output_dir = (tools_dir / (args.output or args.results)).resolve()
+    results_dir = Path(args.results)
+    output_dir = Path(args.output) if args.output else results_dir
+    output_dir.mkdir(exist_ok=True)
 
     human = load_json(results_dir / "human_results.json")
     ai = load_json(results_dir / "ai_results.json")
 
-    if not human or not human.get("selections"):
-        print("❌ 未找到 human_results.json 或无人工盲测数据，请先运行 server.py 收集人工盲测结果")
+    if not human:
+        print("❌ human_results.json 不存在或为空，请先做人工盲测")
         return
-    if not ai or not ai.get("evaluations"):
-        print("⚠️ 未找到 ai_results.json 或无 AI 测评数据")
-        print("   请先用本 Skill 的 /ppt-blind 跑 AI 测评，把结果导出为 results/ai_results.json")
+    if not ai:
+        print("❌ ai_results.json 不存在或为空，请先用本 Skill 跑 AI 测评")
         return
 
-    # 1. 合并
+    # 兼容旧结构（selections → comparisons）
+    if "selections" in human and "comparisons" not in human:
+        human["comparisons"] = human.pop("selections")
+
     merged = merge_results(human, ai)
-    # 2. 各项指标
     overall = calc_overall_rate(merged)
     per_dim = calc_per_dim_rate(merged)
-    confidence = calc_confidence_accuracy(merged)
-    disagreements = find_disagreements(merged)
-    # 3. 生成报告
-    md = generate_markdown(overall, per_dim, confidence, disagreements, human.get("metadata", {}), ai.get("metadata", {}))
-    html = generate_html(overall, per_dim, confidence, disagreements, human.get("metadata", {}), ai.get("metadata", {}))
-    # 4. summary
-    summary = {
-        "generated_at": datetime.now().isoformat(),
-        "overall": overall,
-        "per_dim": per_dim,
-        "confidence_accuracy": confidence,
-        "disagreements": [{"case_id": d["case_id"], "human": d["human"], "ai": d["ai"]} for d in disagreements],
-    }
-    # 写入
+    per_case = calc_per_case_stats(merged)
+
+    # 写报告
+    md = generate_markdown_report(merged, overall, per_dim, per_case, human, ai)
+    html = generate_html_report(merged, overall, per_dim, per_case)
+
     (output_dir / "report.md").write_text(md, encoding="utf-8")
     (output_dir / "report.html").write_text(html, encoding="utf-8")
-    (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "summary.json").write_text(json.dumps({
+        "overall": overall,
+        "per_dim": per_dim,
+        "per_case": per_case,
+        "diverged_count": sum(1 for m in merged if m["match"] is False),
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # 终端摘要
-    print(f"\n{'=' * 60}")
-    print(f"  校准分析完成")
-    print(f"{'=' * 60}")
-    print(f"  比对 case 总数：{overall['total']}")
-    print(f"  AI 与人判断一致：{overall['matched']}")
-    print(f"  一致率：{overall['rate_pct']}")
-    print(f"  分歧 case 数：{len(disagreements)}")
-    print(f"\n  报告输出：")
-    print(f"    - {output_dir / 'report.md'}")
-    print(f"    - {output_dir / 'report.html'}")
-    print(f"    - {output_dir / 'summary.json'}")
-    print(f"{'=' * 60}\n")
+    print(f"✅ 报告生成完成：")
+    print(f"   - {output_dir / 'report.md'}")
+    print(f"   - {output_dir / 'report.html'}")
+    print(f"   - {output_dir / 'summary.json'}")
+    print()
+    print(f"📊 总一致率：{overall['rate_pct']}（{overall['matched']}/{overall['total']}）")
 
 
 if __name__ == "__main__":

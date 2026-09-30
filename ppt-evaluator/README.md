@@ -4,7 +4,14 @@
 
 包含两部分：
 1. **SKILL 本身**：AI 测评（单份 + A/B 盲测）
-2. **tools/**：本地校准工具（人工盲测界面 + AI vs 人工对比分析）
+2. **tools/**：本地校准工具（人工盲测 Case 库 + AI vs 人工对比分析）
+
+## 核心理念
+
+**Case 库 + 任意对比**：
+- 每份 PPT 是一份独立 case（不再是 A/B 两个变体）
+- 盲测时从库中任选 2 个 case 做对比，**跨主题、跨场景**
+- 所有跑过人工盲测的 case 都进入基测集，持续累积校准数据
 
 ## 功能
 
@@ -16,7 +23,8 @@
 - **支持 HTML、多页 HTML、PPTX 三种输入格式**（PPTX 走 LibreOffice 渲染为每页 PNG）
 
 ### 本地校准工具（tools/）
-- **人工盲测界面**：本地 Flask 服务，两两对比 + 自动渲染 + 进度可视化
+- **Case 库管理**：每个 case 一份多页 HTML，UI 上传或手动放置
+- **人工盲测界面**：本地 Flask 服务，从库中任选 2 个 case 对比，6 位匿名 code 隐去真实身份
 - **AI vs 人工对比分析**：计算一致率、分维度准确率、分歧 case 清单
 - **可视化报告**：Markdown 报告 + HTML 图表（echarts）
 
@@ -36,10 +44,10 @@
 
 ```bash
 # 方式一：克隆到 Claude Code skills 目录
-git clone https://github.com/你的用户名/ppt-evaluator.git ~/.claude/skills/ppt-evaluator
+git clone https://github.com/Cherise0801/xuxu-ppt-evaluator.git ~/.claude/skills/ppt-evaluator
 
 # 方式二：npx 一键安装（支持 55+ Agent 工具）
-npx skills add 你的用户名/ppt-evaluator
+npx skills add Cherise0801/xuxu-ppt-evaluator
 ```
 
 ## 使用 Skill
@@ -55,47 +63,49 @@ npx skills add 你的用户名/ppt-evaluator
 详见 [tools/README.md](tools/README.md)。
 
 ```bash
-# 1. 准备 cases（每个 case 一个子目录，含 input.txt + a.{html|pptx} + b.{html|pptx}）
-ls cases/case-001/
-
-# 2. 启动人工盲测界面
+# 1. 安装依赖
 pip install flask pymupdf
 # PPTX 支持需额外安装 LibreOffice（详见 tools/README.md）
+
+# 2. 启动人工盲测界面
 python tools/server.py
 # → 浏览器打开 http://127.0.0.1:5050
 
-# 3. 跑 AI 测评（用本 Skill），结果整理为 results/ai_results.json
+# 3. 在 UI 中选 2 个 case 做盲测（点选卡片）
 
-# 4. 对比分析
+# 4. 跑 AI 测评（用本 Skill /ppt-blind），结果整理为 results/ai_results.json
+
+# 5. 对比分析
 python tools/analyze.py
 # → 生成 report.md / report.html / summary.json
 ```
 
-## 仓库结构
+## Case 库结构
 
 ```
 ppt-evaluator/
 ├── SKILL.md              # 主指令 + 三命令路由
-├── references/
-│   ├── rubric.md         # 7 维评分细则 + 1-10 分锚点
-│   ├── blind-test.md     # A/B 盲测协议（全文级 + 单页级）
-│   └── examples.md       # 测评报告示例
-├── templates/
-│   ├── score-report.md   # 单份评分报告模板
-│   ├── blind-full.md     # 全文盲测报告模板
-│   └── blind-page.md     # 单页盲测报告模板
-├── evals/
-│   └── evals.json        # 自测用例 + 断言
+├── references/           # 评分细则 + 盲测协议
+├── templates/            # 报告模板
+├── evals/                # 自测用例 + 断言
 ├── tools/                # 本地校准工具
-│   ├── server.py         # Flask 启动 + 渲染（HTML + PPTX）
-│   ├── render_pptx.py    # LibreOffice + PyMuPDF 转 PPTX → PNG
-│   ├── compare.html      # 两两对比界面（iframe + 缩略图网格 + 灯箱）
-│   ├── analyze.py        # AI vs 人工对比分析
-│   ├── static/           # 静态依赖（echarts）
-│   └── README.md
-├── cases/                # 用户放 case 的目录（含示例 case-001）
-├── results/              # 输出结果（human_results.json / ai_results.json / 报告）
-└── README.md
+│   ├── server.py
+│   ├── compare.html
+│   ├── analyze.py
+│   └── ...
+├── cases/                # Case 库
+│   ├── _library.json     # 索引
+│   ├── case-003/         # 多页 HTML case
+│   │   ├── 第1页.html
+│   │   └── ...
+│   ├── case-004/         # 另一份 PPT
+│   │   └── ...
+│   └── case-XXX.pptx     # PPTX case
+└── results/              # 输出结果
+    ├── human_results.json
+    ├── ai_results.json
+    ├── report.md
+    └── report.html
 ```
 
 ## 自测
@@ -107,14 +117,14 @@ cat evals/evals.json
 # 启动服务并访问示例 case
 python tools/server.py
 # → 浏览器打开 http://127.0.0.1:5050
-# → 试试 cases/case-001
+# → 试试 cases/case-003（基层政府年度述职报告）和 case-004（汇报规范指南）
 ```
 
 ## 设计参考
 
 - 评分模型参考 [PPT-Eval](https://arxiv.org/html/2606.31154) 的 rubric 部分给分 + 自然语言反馈
 - 盲测机制参考 [skill-creator](https://github.com/anthropics/skills) 的 comparator 模式
-- 格式遵循 [Anthropic Agent Skills](https://www.anthropic.com/news/agent-skills) 开放标准
+- Case 库与匿名化机制设计自 [Anthropic Agent Skills](https://www.anthropic.com/news/agent-skills) 开放标准
 
 ## License
 
